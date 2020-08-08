@@ -1,0 +1,14 @@
+*.o
+*.so
+*.ko
+*.ko.xz
+*.mod
+*.mod.c
+*.cmd
+*.order
+*.symvers
+*.tar.gz
+my_*.sh
+deploy.sh
+bin
+src/user/simpleapp
