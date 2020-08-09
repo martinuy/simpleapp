@@ -43,7 +43,7 @@ cd src
 cd ..
 
 rm -f ${APP_NAME}.tar.gz
-rm -f bin/*
+rm -rf bin
 
 if [ $1 = "clean" ]; then
     exit 0
@@ -57,6 +57,7 @@ cd src
 ./compile.sh
 cd ..
 
+mkdir bin
 cp src/user/${APP_NAME} bin/
 cp src/user/lib${LIB_NAME}.so bin/
 cp src/module/${MODULE_NAME}.ko bin/
