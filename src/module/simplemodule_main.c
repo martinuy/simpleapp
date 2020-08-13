@@ -75,6 +75,8 @@
 
 #define BREAKPOINT_UNSET(SYM) sm_breakpoint_unset(SYM)
 
+#define GDB(CMD) sm_gdb(CMD)
+
 typedef struct output {
      pid_t pid;
      char* output_buffer;
@@ -89,6 +91,7 @@ extern long asm_test_function(void);
 extern void sm_debug(int num);
 extern void sm_breakpoint_set(const char* sym);
 extern void sm_breakpoint_unset(const char* sym);
+extern void sm_gdb(const char* cmd);
 
 static long unlocked_ioctl(struct file* f, unsigned int cmd, unsigned long arg);
 static long run_module_test(unsigned long arg);
@@ -126,6 +129,10 @@ __attribute__((used))
 noinline void sm_breakpoint_unset(const char* sym) {
 }
 
+__attribute__((used))
+noinline void sm_gdb(const char* cmd) {
+}
+
 static long unlocked_ioctl(struct file* f, unsigned int cmd, unsigned long arg) {
     long ret_val = SAMODULE_ERROR;
     switch(cmd) {
@@ -154,7 +161,7 @@ static long unlocked_ioctl(struct file* f, unsigned int cmd, unsigned long arg) 
     case SAMODULE_IOCTL_OUTPUT_FLUSH:
         {
             output_t* out = NULL,* out_it = NULL;
-            mutex_lock(&outputs_lock); \
+            mutex_lock(&outputs_lock);
             list_for_each_entry(out_it, &outputs, list) {
                 if (out_it->pid == current->pid) {
                     out = out_it;
@@ -228,6 +235,7 @@ static long run_module_test(unsigned long arg) {
             if (syscall_number == __NR_getuid) {
                 BREAKPOINT(1);
                 BREAKPOINT_SET("from_kuid");
+                GDB("print/x $pc");
             }
             d.return_value = sys_call_table_ptr[syscall_number](&regs);
             if (syscall_number == __NR_getuid) {
