@@ -75,7 +75,18 @@
 
 #define BREAKPOINT_UNSET(SYM) sm_breakpoint_unset(SYM)
 
-#define GDB(CMD) sm_gdb(CMD)
+#define GDB(cmd, ...) \
+ do { \
+    char* gdb_cmd = NULL; \
+    int bytes_required = 0; \
+    bytes_required = snprintf(NULL, 0, cmd __VA_OPT__(,) __VA_ARGS__) + 1; \
+    gdb_cmd = kmalloc(bytes_required, GFP_KERNEL); \
+    if (gdb_cmd != NULL) { \
+        snprintf(gdb_cmd, bytes_required, cmd __VA_OPT__(,) __VA_ARGS__); \
+        sm_gdb(gdb_cmd); \
+        kfree(gdb_cmd); \
+    } \
+ } while(0)
 
 typedef struct output {
      pid_t pid;
@@ -235,7 +246,7 @@ static long run_module_test(unsigned long arg) {
             if (syscall_number == __NR_getuid) {
                 BREAKPOINT(1);
                 BREAKPOINT_SET("from_kuid");
-                GDB("print/x $pc");
+                GDB("print ((struct task_struct*)(0x%px))->pid", current);
             }
             d.return_value = sys_call_table_ptr[syscall_number](&regs);
             if (syscall_number == __NR_getuid) {
