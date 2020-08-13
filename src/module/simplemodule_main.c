@@ -128,19 +128,19 @@ static struct list_head outputs = LIST_HEAD_INIT(outputs);
 /////////////////////
 //    Functions    //
 /////////////////////
-__attribute__((used))
+__attribute__((used, optimize("O0")))
 noinline void sm_debug(int num) {
 }
 
-__attribute__((used))
+__attribute__((used, optimize("O0")))
 noinline void sm_breakpoint_set(const char* sym) {
 }
 
-__attribute__((used))
+__attribute__((used, optimize("O0")))
 noinline void sm_breakpoint_unset(const char* sym) {
 }
 
-__attribute__((used))
+__attribute__((used, optimize("O0")))
 noinline void sm_gdb(const char* cmd) {
 }
 
@@ -244,9 +244,9 @@ static long run_module_test(unsigned long arg) {
             syscall_set_arguments(current, &regs, syscall_args);
             preempt_disable();
             if (syscall_number == __NR_getuid) {
+                GDB("print ((struct task_struct*)(0x%px))->pid", current);
                 BREAKPOINT(1);
                 BREAKPOINT_SET("from_kuid");
-                GDB("print ((struct task_struct*)(0x%px))->pid", current);
             }
             d.return_value = sys_call_table_ptr[syscall_number](&regs);
             if (syscall_number == __NR_getuid) {
