@@ -19,7 +19,7 @@
 
 #include <linux/cdev.h>
 #include <linux/err.h>
-#include <linux/kallsyms.h>
+#include <linux/kprobes.h>
 #include <linux/mutex.h>
 #include <linux/sched.h>
 #include <linux/string.h>
@@ -104,6 +104,7 @@ extern void sm_breakpoint_set(const char* sym);
 extern void sm_breakpoint_unset(const char* sym);
 extern void sm_gdb(const char* cmd);
 
+static unsigned long sm_lookup_name(const char* sym);
 static long unlocked_ioctl(struct file* f, unsigned int cmd, unsigned long arg);
 static long run_module_test(unsigned long arg);
 static const char* get_syscall_name(unsigned long sys_code);
@@ -280,6 +281,19 @@ cleanup:
     return ret_val;
 }
 
+static unsigned long sm_lookup_name(const char* sym) {
+    int ret;
+    struct kprobe kp = { 0x0 };
+    kp.symbol_name = sym;
+    ret = register_kprobe(&kp);
+    if (ret == 0)
+        unregister_kprobe(&kp);
+    // Even if register_kprobe returned an error, it may have
+    // resolved the symbol. In example, this happens when trying
+    // to set a kprobe out of the Kernel's .text section.
+    return (unsigned long)kp.addr;
+}
+
 static const char* get_syscall_name(unsigned long sys_code) {
     switch(sys_code) {
     #define syscode_case(x) case __NR_##x: return "SYS_"#x;
@@ -344,10 +358,10 @@ static int __init simplemodule_init(void) {
         goto error;
 
     // How to get the address of a function whose symbol was not exported:
-    //      void(*int3_ptr)(void) = (void(*)(void))kallsyms_lookup_name("int3");
+    //      void(*int3_ptr)(void) = (void(*)(void))sm_lookup_name("int3");
     // Invoke: int3_ptr();
 
-    sys_call_table_ptr = (sys_call_ptr_t*)kallsyms_lookup_name("sys_call_table");
+    sys_call_table_ptr = (sys_call_ptr_t*)sm_lookup_name("sys_call_table");
     if (sys_call_table_ptr == NULL)
         goto error;
 
