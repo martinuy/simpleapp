@@ -206,8 +206,8 @@
   GET_MACRO(_0,__VA_ARGS__,FE_6,FE_5,FE_4,FE_3,FE_2,FE_1,)(action,__VA_ARGS__)
 
 # undef MOVE_PARAM_PTR
-# define MOVE_PARAM_PTR(X) \
-        *((__typeof__(X)*)param_ptr) = X;               \
+# define MOVE_PARAM_PTR(X)                              \
+        *(unsigned long*)param_ptr = (unsigned long)X;  \
         param_ptr += 1;
 
 # undef _COUNT_ARGS
