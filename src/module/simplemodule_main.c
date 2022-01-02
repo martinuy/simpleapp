@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020
+ *   Martin Balao (martin.uy) - Copyright 2020, 2022
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -27,6 +27,8 @@
 #include <linux/unistd.h>
 
 #include "simplemodule.h"
+
+#include "__priv_simplemodule.h"
 
 /////////////////////
 //     Defines     //
@@ -292,25 +294,6 @@ static unsigned long sm_lookup_name(const char* sym) {
     // resolved the symbol. In example, this happens when trying
     // to set a kprobe out of the Kernel's .text section.
     return (unsigned long)kp.addr;
-}
-
-static const char* get_syscall_name(unsigned long sys_code) {
-    switch(sys_code) {
-    #define syscode_case(x) case __NR_##x: return "SYS_"#x;
-        syscode_case(clone);
-        syscode_case(close);
-        syscode_case(getuid);
-        syscode_case(mq_getsetattr);
-        syscode_case(mq_notify);
-        syscode_case(mq_open);
-        syscode_case(mq_timedreceive);
-        syscode_case(mq_timedsend);
-        syscode_case(mq_unlink);
-        syscode_case(read);
-        syscode_case(select);
-        syscode_case(socket);
-    }
-    return "SYS_undef";
 }
 
 static void __exit simplemodule_cleanup(void) {
