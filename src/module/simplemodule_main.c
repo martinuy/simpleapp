@@ -25,6 +25,7 @@
 #include <linux/string.h>
 #include <linux/syscalls.h>
 #include <linux/unistd.h>
+#include <linux/version.h>
 
 #include "simplemodule.h"
 
@@ -244,7 +245,14 @@ static long run_module_test(unsigned long arg) {
             SM_LOG(MIN_VERBOSITY, "%s\n", get_syscall_name(syscall_number));
             while (args_i < args_count)
                 syscall_args[args_i++] = *(data_ptr++);
+            #if LINUX_VERSION_CODE <= KERNEL_VERSION(5,0,0)
+            args_i = 0x0UL;
+            while (args_i < args_count)
+                syscall_set_arguments(current, &regs, (unsigned int)args_i++,
+                        (unsigned int)args_count, syscall_args);
+            #else // LINUX_VERSION_CODE
             syscall_set_arguments(current, &regs, syscall_args);
+            #endif // LINUX_VERSION_CODE
             preempt_disable();
             if (syscall_number == __NR_getuid) {
                 GDB("print ((struct task_struct*)(0x%px))->pid", current);
