@@ -54,6 +54,7 @@
          out->output_buffer_size = sizeof(char) * (bytes_required + 1); \
          out->output_buffer = kmalloc(out->output_buffer_size, GFP_KERNEL); \
          snprintf(out->output_buffer, out->output_buffer_size, fmt __VA_OPT__(,) __VA_ARGS__); \
+         GDB("echo %s\n", out->output_buffer); \
          INIT_LIST_HEAD(&out->list); \
          list_add(&out->list, &outputs); \
      } else { \
@@ -61,6 +62,7 @@
                  out->output_buffer_size + (sizeof(char) * bytes_required), GFP_KERNEL); \
          snprintf(out->output_buffer + (out->output_buffer_size - 1), \
                  sizeof(char) * (bytes_required + 1), fmt __VA_OPT__(,) __VA_ARGS__); \
+         GDB("echo %s\n", (out->output_buffer + out->output_buffer_size - 1)); \
          out->output_buffer_size += (sizeof(char) * bytes_required); \
      } \
      mutex_unlock(&outputs_lock); \
