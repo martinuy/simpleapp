@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020
+ *   Martin Balao (martin.uy) - Copyright 2020, 2022
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -18,9 +18,9 @@
     .text
 
     .align 8
-    .globl asm_test_function
-    .type asm_test_function, @function
-asm_test_function:
+    .globl run_module_asm
+    .type run_module_asm, @function
+run_module_asm:
     lea (%rip), %rax
     ret
-    .size asm_test_function,.-asm_test_function
+    .size run_module_asm,.-run_module_asm

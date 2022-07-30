@@ -103,7 +103,8 @@ typedef struct output {
 /////////////////////////
 // Function prototypes //
 /////////////////////////
-extern long asm_test_function(void);
+extern long run_module_asm(void);
+static long run_module_code(void);
 extern void sm_debug(int num);
 extern void sm_breakpoint_set(const char* sym);
 extern void sm_breakpoint_unset(const char* sym);
@@ -269,9 +270,11 @@ static long run_module_test(unsigned long arg) {
             }
             preempt_enable();
         }
-    } else if (d.test_number == TEST_ASM) {
-        d.return_value = (unsigned long) asm_test_function();
-        print_mem_area("asm_test_function 'RET' opcode", (void*)d.return_value, 1);
+    } else if (d.test_number == TEST_MODULE_ASM) {
+        d.return_value = (unsigned long) run_module_asm();
+        print_mem_area("run_module_asm 'RET' opcode", (void*)d.return_value, 1);
+    } else if (d.test_number == TEST_MODULE_CODE) {
+        d.return_value = (unsigned long) run_module_code();
     }
 
     if (d.data_length != 0x0UL) {
@@ -293,6 +296,10 @@ cleanup:
     if (d_data_krn != NULL)
         kfree(d_data_krn);
     return ret_val;
+}
+
+static long run_module_code(void) {
+    return 0x0L;
 }
 
 static unsigned long sm_lookup_name(const char* sym) {

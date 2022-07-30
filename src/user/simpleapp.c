@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020
+ *   Martin Balao (martin.uy) - Copyright 2020, 2022
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -29,6 +29,7 @@
 #include "simplemodule.h"
 
 static void execute_module_asm(void);
+static void execute_module_code(void);
 static void execute_proxied_syscalls(void);
 static void execute_direct_syscalls(void);
 static void execute_direct_asm(void);
@@ -45,6 +46,8 @@ int main(void) {
     execute_proxied_syscalls();
 
     execute_module_asm();
+
+    execute_module_code();
 
     execute_direct_asm();
 
@@ -66,14 +69,27 @@ cleanup:
 __attribute__((noinline))
 void execute_module_asm(void) {
     module_test_data_t module_test_data = {0x0};
-    module_test_data.test_number = TEST_ASM;
+    module_test_data.test_number = TEST_MODULE_ASM;
     if (run_module_test(&module_test_data) == SLIB_ERROR)
         goto error;
     print_module_output();
-    SA_LOG(MIN_VERBOSITY, "TEST_ASM return: 0x%lx\n", module_test_data.return_value);
+    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_ASM return: 0x%lx\n", module_test_data.return_value);
     return;
 error:
-    SA_LOG(MIN_VERBOSITY, "TEST_ASM error\n");
+    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_ASM error\n");
+}
+
+__attribute__((noinline))
+void execute_module_code(void) {
+    module_test_data_t module_test_data = {0x0};
+    module_test_data.test_number = TEST_MODULE_CODE;
+    if (run_module_test(&module_test_data) == SLIB_ERROR)
+        goto error;
+    print_module_output();
+    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_CODE return: 0x%lx\n", module_test_data.return_value);
+    return;
+error:
+    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_CODE error\n");
 }
 
 __attribute__((noinline))

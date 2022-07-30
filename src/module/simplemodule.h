@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020
+ *   Martin Balao (martin.uy) - Copyright 2020, 2022
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -50,7 +50,8 @@ typedef struct module_test_data {
     long return_value;          // write-only (in kernel)
 } module_test_data_t;
 
-#define TEST_ASM 0x1U
+#define TEST_MODULE_ASM 0x1U
+#define TEST_MODULE_CODE 0x2U
 
 // IOCTLs
 #define SAMODULE_IOCTL_TYPE 0xA4
