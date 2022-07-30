@@ -265,14 +265,24 @@ static long run_module_test(unsigned long arg) {
             }
             #endif // LINUX_VERSION_CODE
             preempt_disable();
-            if (syscall_number == __NR_getuid) {
-                GDB("print ((struct task_struct*)(0x%px))->pid", current);
-                BREAKPOINT(1);
-                BREAKPOINT_SET("from_kuid");
+            if (syscall_number == __NR_mq_open) {
+                GDB("print *(struct vfsmount *)(((struct task_struct*)(0x%px))->nsproxy->ipc_ns->mq_mnt)", current);
+                // Functions to watch once the queue is opened:
+                //BREAKPOINT_SET("mqueue_create");
+                //BREAKPOINT_SET("mqueue_unlink");
+                //BREAKPOINT_SET("mqueue_flush_file");
+                //BREAKPOINT_SET("mqueue_poll_file");
+                //BREAKPOINT_SET("mqueue_read_file");
+                //BREAKPOINT_SET("mqueue_alloc_inode");
+                //BREAKPOINT_SET("mqueue_free_inode");
+                //BREAKPOINT_SET("mqueue_evict_inode");
+                //BREAKPOINT_SET("mqueue_fs_context_free");
+                //BREAKPOINT_SET("mqueue_get_tree");
+                //BREAKPOINT_SET("mqueue_init_fs_context");
             }
             d.return_value = sys_call_table_ptr[syscall_number](&regs);
-            if (syscall_number == __NR_getuid) {
-                BREAKPOINT_UNSET("from_kuid");
+            if (syscall_number == __NR_mq_open) {
+                SM_PRINTF("mq_open finished, going back to user-space\n");
             }
             preempt_enable();
         }
