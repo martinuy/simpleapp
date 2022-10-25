@@ -20,9 +20,7 @@
 #include <linux/cdev.h>
 #include <linux/err.h>
 #include <linux/kprobes.h>
-#include <linux/mm_types.h>
 #include <linux/mutex.h>
-#include <linux/rmap.h>
 #include <linux/sched.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
@@ -385,19 +383,23 @@ MODULE_LICENSE("GPL");
 
 static void pre_syscall_trampoline_hook(unsigned long syscall_number,
         unsigned long syscall_args[]) {
-    if (syscall_number == __NR_getuid) {
-        GDB("print ((struct task_struct*)(0x%px))->pid", current);
-        BREAKPOINT(1);
-        BREAKPOINT_SET("from_kuid");
+    if (syscall_number == __NR_mmap) {
+        BREAKPOINT_SET("mmap_region");
     }
 }
 
 static void post_syscall_trampoline_hook(unsigned long syscall_number,
         unsigned long syscall_args[], unsigned long return_value) {
-    if (syscall_number == __NR_getuid) {
-        BREAKPOINT_UNSET("from_kuid");
+    if (syscall_number == __NR_mmap) {
+        BREAKPOINT_UNSET("mmap_region");
+        GDB("stopi on");
+        BREAKPOINT_SET("handle_mm_fault");
+        GDB("break mm/memory.c:2565");
     }
 }
+
+#include <linux/mm_types.h>
+#include <linux/rmap.h>
 
 static void navigate_page_tables(unsigned long vaddr);
 static void print_mem_zone(struct zone* zone);
@@ -406,6 +408,7 @@ static void print_node_zonelists(pg_data_t* pglist_data_ptr);
 // References to headers
 // struct page --> mm_types.h
 // struct pglist_data -> mmzone.h
+// Buddy allocator -> page_alloc.c
 static long run_module_code_hook(void) {
     unsigned int cpu = get_cpu();
     pgd_t* current_pgd_address;
@@ -424,7 +427,7 @@ static long run_module_code_hook(void) {
     struct page* plast = pfn_to_page(node_end_pfn(cpu_to_node(cpu))-1);
     char* m_kmalloc = NULL;
     GDB("print *(pg_data_t*)0x%px", pglist_data_ptr);
-    pn = alloc_page(GFP_KERNEL | __GFP_ZERO); // Page allocation occurs in rmqueue (page_alloc.c)
+    pn = alloc_pages(GFP_KERNEL | __GFP_ZERO, 1); // Page allocation occurs in rmqueue (page_alloc.c)
     m_kmalloc = (char*)kmalloc(sizeof(char)*4, GFP_KERNEL);
     SM_PRINTF("\n");
     SM_PRINTF("===== MEMORY MAPPING =====\n");
@@ -514,6 +517,17 @@ static long run_module_code_hook(void) {
     SM_PRINTF("pte_page(pfn_pte(0)): 0x%px\n", pte_page(pfn_pte(0, PAGE_READONLY)));
     navigate_page_tables((unsigned long)(&vmemmap[0]));
     navigate_page_tables((unsigned long)(page_to_virt(p0)));
+
+    //BREAKPOINT_SET("__alloc_pages_nodemask");
+    //BREAKPOINT_SET("get_page_from_freelist");
+    //BREAKPOINT_SET("__zone_watermark_ok");
+    //GDB("break *(get_page_from_freelist+3195)"); // --> in rbp there is the struct page* page from page_alloc.c#L2193
+    pn = alloc_pages(GFP_USER, 1);
+    print_mem_area("GFP_USER page", page_to_virt(pn), 32);
+    //BREAKPOINT_UNSET("__zone_watermark_ok");
+    //BREAKPOINT_UNSET("get_page_from_freelist");
+    //BREAKPOINT_UNSET("__alloc_pages_nodemask");
+
     {
         struct vm_area_struct* vma_p = current->mm->mmap;
         while (vma_p != NULL) {

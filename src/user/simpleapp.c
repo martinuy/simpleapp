@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 #include "simpleapp_syscalls.h"
@@ -68,15 +69,6 @@ cleanup:
 
 __attribute__((noinline))
 void execute_module_asm_hook(void) {
-    module_test_data_t module_test_data = {0x0};
-    module_test_data.test_number = TEST_MODULE_ASM;
-    if (run_module_test(&module_test_data) == SLIB_ERROR)
-        goto error;
-    print_module_output();
-    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_ASM return: 0x%lx\n", module_test_data.return_value);
-    return;
-error:
-    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_ASM error\n");
 }
 
 __attribute__((noinline))
@@ -94,27 +86,26 @@ error:
 
 __attribute__((noinline))
 void execute_proxied_syscalls_hook(void) {
-    uid_t u = SM_SYS(getuid);
-    SA_LOG(MIN_VERBOSITY, "uid: %d\n", u);
+    int i = 0;
+    void* mmaped_page = (void*)SM_SYS(mmap, NULL, sysconf(_SC_PAGE_SIZE)*10, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
+    if (mmaped_page != MAP_FAILED) {
+        for (i = 0; i < (sysconf(_SC_PAGE_SIZE)*10) / sizeof(int); i++) {
+            if (((int*)mmaped_page)[i] != 0) {
+                SA_LOG(MIN_VERBOSITY, "BYTE != 0x0\n");
+            }
+            ((int*)mmaped_page)[i] = 0;
+        }
+        SA_LOG(MIN_VERBOSITY, "Zero-check finished\n");
+        SM_SYS(munmap, mmaped_page, sysconf(_SC_PAGE_SIZE)*10);
+    } else {
+        SA_LOG(MIN_VERBOSITY, "mmap failed\n");
+    }
 }
 
 __attribute__((noinline))
 void execute_direct_syscalls_hook(void) {
-    int sys_open_fd = -1;
-
-    sys_open_fd = _sys_open("/proc/self/exe", O_RDONLY, 0);
-    if (sys_open_fd < 0)
-        goto cleanup;
-    else
-        SA_LOG(MIN_VERBOSITY, "sys_open_fd: %d\n", sys_open_fd);
-
-cleanup:
-    if (sys_open_fd != -1)
-        close(sys_open_fd);
 }
 
 __attribute__((noinline))
 void execute_direct_asm_hook(void) {
-    __asm__ __volatile__ ("cpuid\n\t" \
-           : : : "rax", "rbx", "rcx", "rdx");
 }
