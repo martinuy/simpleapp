@@ -20,7 +20,9 @@
 #include <linux/cdev.h>
 #include <linux/err.h>
 #include <linux/kprobes.h>
+#include <linux/mm_types.h>
 #include <linux/mutex.h>
+#include <linux/rmap.h>
 #include <linux/sched.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
