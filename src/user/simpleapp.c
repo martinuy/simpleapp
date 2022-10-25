@@ -43,40 +43,6 @@ static void execute_proxied_syscalls_hook(void);
 static void execute_direct_syscalls_hook(void);
 static void execute_direct_asm_hook(void);
 
-char* read_buff = NULL;
-char* read_buff_ptr = NULL;
-#define READ_BUFF_INC_SIZE 1024UL
-unsigned long read_buff_size = 0UL;
-unsigned long read_buff_used = 0UL;
-
-typedef int mqd_t;
-#define MQ_MSG_SIZE 16L
-static char mq_send_receive_buffer[MQ_MSG_SIZE];
-static unsigned int mq_msg_prio;
-static ssize_t mq_bytes_received;
-static mqd_t mq1 = (mqd_t)-1;
-static const char* mq1_name = "mq1";
-static struct mq_attr mq1_attr = {
-        .mq_flags = 0L, .mq_maxmsg = 20L, .mq_msgsize = MQ_MSG_SIZE, .mq_curmsgs = 0L
-};
-static struct mq_attr mq1_attr_2;
-static const char* mq1_message_1 = "mq-1 message 1";
-static struct timespec mq1_time = {.tv_sec = 0L, .tv_nsec = 0L};
-static int mq1_notification_socket = -1;
-static char mq1_notification_cookie[NOTIFY_COOKIE_LEN] = {
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-        0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-        0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F
-};
-static struct sigevent mq1_sevp = {
-        .sigev_value.sival_ptr = &mq1_notification_cookie,
-        .sigev_signo = 0,
-        .sigev_notify = SIGEV_THREAD,
-        .sigev_notify_function = NULL,
-        .sigev_notify_attributes = NULL
-};
-
 int main(void) {
     int ret = -1;
     SA_LOG(MAX_VERBOSITY, "main - begin\n");
@@ -134,6 +100,74 @@ void execute_module_code_hook(void) {
 error:
     SA_LOG(MIN_VERBOSITY, "TEST_MODULE_CODE error\n");
 }
+
+char* read_buff = NULL;
+char* read_buff_ptr = NULL;
+#define READ_BUFF_INC_SIZE 1024UL
+unsigned long read_buff_size = 0UL;
+unsigned long read_buff_used = 0UL;
+
+typedef int mqd_t;
+#define MQ_MSG_SIZE 16L
+static char mq_send_receive_buffer[MQ_MSG_SIZE];
+static unsigned int mq_msg_prio;
+static ssize_t mq_bytes_received;
+static mqd_t mq1 = (mqd_t)-1;
+static const char* mq1_name = "mq1";
+static struct mq_attr mq1_attr = {
+        .mq_flags = 0L, .mq_maxmsg = 20L, .mq_msgsize = MQ_MSG_SIZE, .mq_curmsgs = 0L
+};
+static struct mq_attr mq1_attr_2;
+static const char* mq1_message_1 = "mq-1 message 1";
+static struct timespec mq1_time = {.tv_sec = 0L, .tv_nsec = 0L};
+static int mq1_notification_socket = -1;
+static char mq1_notification_cookie[NOTIFY_COOKIE_LEN] = {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F
+};
+static struct sigevent mq1_sevp = {
+        .sigev_value.sival_ptr = &mq1_notification_cookie,
+        .sigev_signo = 0,
+        .sigev_notify = SIGEV_THREAD,
+        .sigev_notify_function = NULL,
+        .sigev_notify_attributes = NULL
+};
+
+char* read_buff = NULL;
+char* read_buff_ptr = NULL;
+#define READ_BUFF_INC_SIZE 1024UL
+unsigned long read_buff_size = 0UL;
+unsigned long read_buff_used = 0UL;
+
+typedef int mqd_t;
+#define MQ_MSG_SIZE 16L
+static char mq_send_receive_buffer[MQ_MSG_SIZE];
+static unsigned int mq_msg_prio;
+static ssize_t mq_bytes_received;
+static mqd_t mq1 = (mqd_t)-1;
+static const char* mq1_name = "mq1";
+static struct mq_attr mq1_attr = {
+        .mq_flags = 0L, .mq_maxmsg = 20L, .mq_msgsize = MQ_MSG_SIZE, .mq_curmsgs = 0L
+};
+static struct mq_attr mq1_attr_2;
+static const char* mq1_message_1 = "mq-1 message 1";
+static struct timespec mq1_time = {.tv_sec = 0L, .tv_nsec = 0L};
+static int mq1_notification_socket = -1;
+static char mq1_notification_cookie[NOTIFY_COOKIE_LEN] = {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+        0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F
+};
+static struct sigevent mq1_sevp = {
+        .sigev_value.sival_ptr = &mq1_notification_cookie,
+        .sigev_signo = 0,
+        .sigev_notify = SIGEV_THREAD,
+        .sigev_notify_function = NULL,
+        .sigev_notify_attributes = NULL
+};
 
 __attribute__((noinline))
 void execute_proxied_syscalls_hook(void) {
@@ -239,26 +273,12 @@ cleanup:
     }
     if (read_buff != NULL)
         free(read_buff);
->>>>>>> Posix queues playground - initial load
 }
 
 __attribute__((noinline))
 void execute_direct_syscalls_hook(void) {
-    int sys_open_fd = -1;
-
-    sys_open_fd = _sys_open("/proc/self/exe", O_RDONLY, 0);
-    if (sys_open_fd < 0)
-        goto cleanup;
-    else
-        SA_LOG(MIN_VERBOSITY, "sys_open_fd: %d\n", sys_open_fd);
-
-cleanup:
-    if (sys_open_fd != -1)
-        close(sys_open_fd);
 }
 
 __attribute__((noinline))
 void execute_direct_asm_hook(void) {
-    __asm__ __volatile__ ("cpuid\n\t" \
-           : : : "rax", "rbx", "rcx", "rdx");
 }
