@@ -103,8 +103,12 @@ typedef struct output {
 /////////////////////////
 // Function prototypes //
 /////////////////////////
-extern long run_module_asm(void);
-static long run_module_code(void);
+static void pre_syscall_trampoline_hook(unsigned long syscall_number,
+        unsigned long syscall_args[]);
+static void post_syscall_trampoline_hook(unsigned long syscall_number,
+        unsigned long syscall_args[], unsigned long return_value);
+extern long run_module_asm_hook(void);
+static long run_module_code_hook(void);
 extern void sm_debug(int num);
 extern void sm_breakpoint_set(const char* sym);
 extern void sm_breakpoint_unset(const char* sym);
@@ -248,6 +252,8 @@ static long run_module_test(unsigned long arg) {
             SM_LOG(MIN_VERBOSITY, "%s\n", get_syscall_name(syscall_number));
             while (args_i < args_count)
                 syscall_args[args_i++] = *(data_ptr++);
+            preempt_disable();
+            pre_syscall_trampoline_hook(syscall_number, syscall_args);
             args_i = 0x0UL;
             #if LINUX_VERSION_CODE <= KERNEL_VERSION(5,0,0)
             while (args_i < args_count) {
@@ -264,23 +270,14 @@ static long run_module_test(unsigned long arg) {
                 regs.r9 = syscall_args[args_i];
             }
             #endif // LINUX_VERSION_CODE
-            preempt_disable();
-            if (syscall_number == __NR_getuid) {
-                GDB("print ((struct task_struct*)(0x%px))->pid", current);
-                BREAKPOINT(1);
-                BREAKPOINT_SET("from_kuid");
-            }
             d.return_value = sys_call_table_ptr[syscall_number](&regs);
-            if (syscall_number == __NR_getuid) {
-                BREAKPOINT_UNSET("from_kuid");
-            }
+            post_syscall_trampoline_hook(syscall_number, syscall_args, d.return_value);
             preempt_enable();
         }
     } else if (d.test_number == TEST_MODULE_ASM) {
-        d.return_value = (unsigned long) run_module_asm();
-        print_mem_area("run_module_asm 'RET' opcode", (void*)d.return_value, 1);
+        d.return_value = (unsigned long) run_module_asm_hook();
     } else if (d.test_number == TEST_MODULE_CODE) {
-        d.return_value = (unsigned long) run_module_code();
+        d.return_value = (unsigned long) run_module_code_hook();
     }
 
     if (d.data_length != 0x0UL) {
@@ -302,10 +299,6 @@ cleanup:
     if (d_data_krn != NULL)
         kfree(d_data_krn);
     return ret_val;
-}
-
-static long run_module_code(void) {
-    return 0x0L;
 }
 
 static unsigned long sm_lookup_name(const char* sym) {
@@ -387,3 +380,23 @@ success:
 module_init(simplemodule_init);
 module_exit(simplemodule_cleanup);
 MODULE_LICENSE("GPL");
+
+static void pre_syscall_trampoline_hook(unsigned long syscall_number,
+        unsigned long syscall_args[]) {
+    if (syscall_number == __NR_getuid) {
+        GDB("print ((struct task_struct*)(0x%px))->pid", current);
+        BREAKPOINT(1);
+        BREAKPOINT_SET("from_kuid");
+    }
+}
+
+static void post_syscall_trampoline_hook(unsigned long syscall_number,
+        unsigned long syscall_args[], unsigned long return_value) {
+    if (syscall_number == __NR_getuid) {
+        BREAKPOINT_UNSET("from_kuid");
+    }
+}
+
+static long run_module_code_hook(void) {
+    return 0x0L;
+}

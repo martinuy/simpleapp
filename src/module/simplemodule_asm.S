@@ -18,9 +18,9 @@
     .text
 
     .align 8
-    .globl run_module_asm
-    .type run_module_asm, @function
-run_module_asm:
+    .globl run_module_asm_hook
+    .type run_module_asm_hook, @function
+run_module_asm_hook:
     lea (%rip), %rax
     ret
-    .size run_module_asm,.-run_module_asm
+    .size run_module_asm_hook,.-run_module_asm_hook

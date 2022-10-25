@@ -28,11 +28,11 @@
 #include "simplelib.h"
 #include "simplemodule.h"
 
-static void execute_module_asm(void);
-static void execute_module_code(void);
-static void execute_proxied_syscalls(void);
-static void execute_direct_syscalls(void);
-static void execute_direct_asm(void);
+static void execute_module_asm_hook(void);
+static void execute_module_code_hook(void);
+static void execute_proxied_syscalls_hook(void);
+static void execute_direct_syscalls_hook(void);
+static void execute_direct_asm_hook(void);
 
 int main(void) {
     int ret = -1;
@@ -43,15 +43,15 @@ int main(void) {
 
     BREAKPOINT(1);
 
-    execute_proxied_syscalls();
+    execute_proxied_syscalls_hook();
 
-    execute_module_asm();
+    execute_module_asm_hook();
 
-    execute_module_code();
+    execute_module_code_hook();
 
-    execute_direct_asm();
+    execute_direct_asm_hook();
 
-    execute_direct_syscalls();
+    execute_direct_syscalls_hook();
 
     goto success;
 error:
@@ -67,7 +67,7 @@ cleanup:
 }
 
 __attribute__((noinline))
-void execute_module_asm(void) {
+void execute_module_asm_hook(void) {
     module_test_data_t module_test_data = {0x0};
     module_test_data.test_number = TEST_MODULE_ASM;
     if (run_module_test(&module_test_data) == SLIB_ERROR)
@@ -80,7 +80,7 @@ error:
 }
 
 __attribute__((noinline))
-void execute_module_code(void) {
+void execute_module_code_hook(void) {
     module_test_data_t module_test_data = {0x0};
     module_test_data.test_number = TEST_MODULE_CODE;
     if (run_module_test(&module_test_data) == SLIB_ERROR)
@@ -93,13 +93,13 @@ error:
 }
 
 __attribute__((noinline))
-void execute_proxied_syscalls(void) {
+void execute_proxied_syscalls_hook(void) {
     uid_t u = SM_SYS(getuid);
     SA_LOG(MIN_VERBOSITY, "uid: %d\n", u);
 }
 
 __attribute__((noinline))
-void execute_direct_syscalls(void) {
+void execute_direct_syscalls_hook(void) {
     int sys_open_fd = -1;
 
     sys_open_fd = _sys_open("/proc/self/exe", O_RDONLY, 0);
@@ -114,7 +114,7 @@ cleanup:
 }
 
 __attribute__((noinline))
-void execute_direct_asm(void) {
+void execute_direct_asm_hook(void) {
     __asm__ __volatile__ ("cpuid\n\t" \
            : : : "rax", "rbx", "rcx", "rdx");
 }
