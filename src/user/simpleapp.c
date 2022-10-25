@@ -22,7 +22,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
-#include <sys/mman.h>
 #include <unistd.h>
 
 #include "simpleapp_syscalls.h"
@@ -83,6 +82,8 @@ void execute_module_code_hook(void) {
 error:
     SA_LOG(MIN_VERBOSITY, "TEST_MODULE_CODE error\n");
 }
+
+#include <sys/mman.h>
 
 __attribute__((noinline))
 void execute_proxied_syscalls_hook(void) {
