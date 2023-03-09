@@ -102,6 +102,9 @@ __attribute__((noinline))
 void execute_direct_syscalls_hook(void) {
     int sys_open_fd = -1;
 
+    KERNEL_GDB("echo \"Setting a breakpoint in do_sys_open.\"");
+    KERNEL_GDB("stopi on");
+    KERNEL_BREAKPOINT_SET("do_sys_open");
     sys_open_fd = _sys_open("/proc/self/exe", O_RDONLY, 0);
     if (sys_open_fd < 0)
         goto cleanup;
@@ -109,6 +112,7 @@ void execute_direct_syscalls_hook(void) {
         SA_LOG(MIN_VERBOSITY, "sys_open_fd: %d\n", sys_open_fd);
 
 cleanup:
+    KERNEL_BREAKPOINT_UNSET("do_sys_open");
     if (sys_open_fd != -1)
         close(sys_open_fd);
 }

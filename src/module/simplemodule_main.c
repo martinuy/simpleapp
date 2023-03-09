@@ -278,6 +278,19 @@ static long run_module_test(unsigned long arg) {
         d.return_value = (unsigned long) run_module_asm_hook();
     } else if (d.test_number == TEST_MODULE_CODE) {
         d.return_value = (unsigned long) run_module_code_hook();
+    } else if (d.test_number == TEST_MODULE_GDB) {
+        unsigned int gdb_mode = *((unsigned int*)d.data);
+        const char* gdb_data = ((const char*)d.data + sizeof(unsigned int));
+        d.return_value = GDB_SUCCESS;
+        if (gdb_mode == GDB_MODE_BREAKPOINT_GDB) {
+            sm_gdb(gdb_data);
+        } else if (gdb_mode == GDB_MODE_BREAKPOINT_SET) {
+            sm_breakpoint_set(gdb_data);
+        } else if (gdb_mode == GDB_MODE_BREAKPOINT_UNSET) {
+            sm_breakpoint_unset(gdb_data);
+        } else {
+            d.return_value = GDB_ERROR;
+        }
     }
 
     if (d.data_length != 0x0UL) {
