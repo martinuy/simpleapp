@@ -52,6 +52,15 @@ typedef struct module_test_data {
 
 #define TEST_MODULE_ASM 0x1U
 #define TEST_MODULE_CODE 0x2U
+#define TEST_MODULE_GDB 0x3U
+
+// TEST_MODULE_GDB modes
+#define GDB_MODE_BREAKPOINT_SET 0x1U
+#define GDB_MODE_BREAKPOINT_UNSET 0x2U
+#define GDB_MODE_BREAKPOINT_GDB 0x3U
+
+#define GDB_SUCCESS 0x0L
+#define GDB_ERROR 0x1L
 
 // IOCTLs
 #define SAMODULE_IOCTL_TYPE 0xA4
