@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2022
+ *   Martin Balao (martin.uy) - Copyright 2022, 2023
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -15,10 +15,12 @@
  *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __PRIV_SIMPLEMODULE_H
-#define __PRIV_SIMPLEMODULE_H
+#ifndef __SIMPLEMODULE_KERNEL_LIB_SYSCALLS_H
+#define __SIMPLEMODULE_KERNEL_LIB_SYSCALLS_H
 
-static const char* get_syscall_name(unsigned long sys_code) {
+#include <linux/syscalls.h>
+
+const char* get_syscall_name(unsigned long sys_code) {
     switch(sys_code) {
     #define syscode_case(x) case __NR_##x: return "SYS_"#x;
         // From Linux 4.14.0 headers (x86_64)
@@ -359,4 +361,4 @@ static const char* get_syscall_name(unsigned long sys_code) {
     return "SYS_undef";
 }
 
-#endif // __PRIV_SIMPLEMODULE_H
+#endif // __SIMPLEMODULE_KERNEL_LIB_SYSCALLS_H

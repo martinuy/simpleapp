@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020, 2022
+ *   Martin Balao (martin.uy) - Copyright 2020, 2023
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -24,15 +24,14 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#include "simpleapp_syscalls.h"
 #include "simplelib.h"
 #include "simplemodule.h"
 
-static void execute_module_asm_hook(void);
-static void execute_module_code_hook(void);
-static void execute_proxied_syscalls_hook(void);
-static void execute_direct_syscalls_hook(void);
-static void execute_direct_asm_hook(void);
+static void execute_module_asm_function(void);
+static void execute_module_c_function(void);
+static void execute_proxied_syscall(void);
+static void execute_direct_syscall(void);
+static void execute_direct_asm(void);
 
 int main(void) {
     int ret = -1;
@@ -43,15 +42,15 @@ int main(void) {
 
     BREAKPOINT(1);
 
-    execute_proxied_syscalls_hook();
+    execute_proxied_syscall();
 
-    execute_module_asm_hook();
+    execute_module_asm_function();
 
-    execute_module_code_hook();
+    execute_module_c_function();
 
-    execute_direct_asm_hook();
+    execute_direct_asm();
 
-    execute_direct_syscalls_hook();
+    execute_direct_syscall();
 
     goto success;
 error:
@@ -67,41 +66,26 @@ cleanup:
 }
 
 __attribute__((noinline))
-void execute_module_asm_hook(void) {
-    module_test_data_t module_test_data = {0x0};
-    module_test_data.test_number = TEST_MODULE_ASM;
-    if (run_module_test(&module_test_data) == SLIB_ERROR)
-        goto error;
-    print_module_output();
-    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_ASM return: 0x%lx\n", module_test_data.return_value);
-    return;
-error:
-    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_ASM error\n");
+void execute_module_asm_function(void) {
+    unsigned long ret = SMF_CALL(sm_asm_function_hook);
+    SA_LOG(MIN_VERBOSITY, "execute_module_asm_function ret: 0x%lx\n", ret);
 }
 
 __attribute__((noinline))
-void execute_module_code_hook(void) {
-    module_test_data_t module_test_data = {0x0};
-    module_test_data.test_number = TEST_MODULE_CODE;
-    if (run_module_test(&module_test_data) == SLIB_ERROR)
-        goto error;
-    print_module_output();
-    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_CODE return: 0x%lx\n", module_test_data.return_value);
-    return;
-error:
-    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_CODE error\n");
+void execute_module_c_function(void) {
+    unsigned long ret = SMF_CALL(sm_c_function_hook, -1);
+    SA_LOG(MIN_VERBOSITY, "execute_module_c_function ret: 0x%lx\n", ret);
 }
 
 __attribute__((noinline))
-void execute_proxied_syscalls_hook(void) {
+void execute_proxied_syscall(void) {
     uid_t u = SM_SYS(getuid);
     SA_LOG(MIN_VERBOSITY, "uid: %d\n", u);
 }
 
 __attribute__((noinline))
-void execute_direct_syscalls_hook(void) {
+void execute_direct_syscall(void) {
     int sys_open_fd = -1;
-
     KERNEL_GDB("echo \"Setting a breakpoint in do_sys_open.\"");
     KERNEL_GDB("stopi on");
     KERNEL_BREAKPOINT_SET("do_sys_open");
@@ -110,7 +94,6 @@ void execute_direct_syscalls_hook(void) {
         goto cleanup;
     else
         SA_LOG(MIN_VERBOSITY, "sys_open_fd: %d\n", sys_open_fd);
-
 cleanup:
     KERNEL_BREAKPOINT_UNSET("do_sys_open");
     if (sys_open_fd != -1)
@@ -118,7 +101,7 @@ cleanup:
 }
 
 __attribute__((noinline))
-void execute_direct_asm_hook(void) {
+void execute_direct_asm(void) {
     __asm__ __volatile__ ("cpuid\n\t" \
            : : : "rax", "rbx", "rcx", "rdx");
 }

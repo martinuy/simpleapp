@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020, 2022
+ *   Martin Balao (martin.uy) - Copyright 2020, 2023
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -40,32 +40,29 @@
 #define LOG_VERBOSITY MEDIUM_VERBOSITY
 
 //
-// Tests
+// SM_CALL
 //
-#define TEST_SYSCALLS_TRAMPOLINE 0x0U
-typedef struct module_test_data {
-    unsigned int test_number;   // read-only (in kernel)
+#define SM_CALL_SYSCALLS_TRAMPOLINE 0x0U
+typedef struct sm_call_data {
+    unsigned int call_number;   // read-only (in kernel)
     void* data;                 // in/out buffer to kernel
     unsigned long data_length;  // read-only (in kernel)
     long return_value;          // write-only (in kernel)
-} module_test_data_t;
+} sm_call_data_t;
+#define SM_CALL_FUNCTION 0x1U
+#define SM_CALL_GDB 0x2U
 
-#define TEST_MODULE_ASM 0x1U
-#define TEST_MODULE_CODE 0x2U
-#define TEST_MODULE_GDB 0x3U
-
-// TEST_MODULE_GDB modes
+// SM_CALL_GDB
 #define GDB_MODE_BREAKPOINT_SET 0x1U
 #define GDB_MODE_BREAKPOINT_UNSET 0x2U
 #define GDB_MODE_BREAKPOINT_GDB 0x3U
-
 #define GDB_SUCCESS 0x0L
 #define GDB_ERROR 0x1L
 
 // IOCTLs
-#define SAMODULE_IOCTL_TYPE 0xA4
-#define SAMODULE_IOCTL_TEST _IOW(SAMODULE_IOCTL_TYPE, 0x00, module_test_data_t)
-#define SAMODULE_IOCTL_OUTPUT_SIZE _IO(SAMODULE_IOCTL_TYPE, 0x01)
-#define SAMODULE_IOCTL_OUTPUT_FLUSH _IOR(SAMODULE_IOCTL_TYPE, 0x02, char)
+#define SM_IOCTL_TYPE 0xA4
+#define SM_IOCTL_CALL _IOW(SM_IOCTL_TYPE, 0x00, sm_call_data_t)
+#define SM_IOCTL_OUTPUT_SIZE _IO(SM_IOCTL_TYPE, 0x01)
+#define SM_IOCTL_OUTPUT_FLUSH _IOR(SM_IOCTL_TYPE, 0x02, char)
 
 #endif // SIMPLEMODULE_H

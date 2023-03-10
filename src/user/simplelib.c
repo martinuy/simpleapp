@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020
+ *   Martin Balao (martin.uy) - Copyright 2020, 2023
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include <libgen.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -196,13 +197,13 @@ const char* get_module_output(void) {
     if (module_loaded != LOADED)
         goto error;
     output_size = (unsigned long)ioctl(simplemodule_fd,
-            SAMODULE_IOCTL_OUTPUT_SIZE, 0UL);
+            SM_IOCTL_OUTPUT_SIZE, 0UL);
     if (output_size == 0UL)
         goto success;
     output_buffer = (const char*)malloc(output_size);
     if (output_buffer == NULL)
         goto error;
-    if (ioctl(simplemodule_fd, SAMODULE_IOCTL_OUTPUT_FLUSH,
+    if (ioctl(simplemodule_fd, SM_IOCTL_OUTPUT_FLUSH,
             (void*)output_buffer) != SAMODULE_SUCCESS)
         goto error;
     goto success;
@@ -216,13 +217,13 @@ cleanup:
     return output_buffer;
 }
 
-long run_module_test(module_test_data_t* d) {
+long sm_call(sm_call_data_t* d) {
     long ret = SLIB_ERROR;
 
     if (module_loaded != LOADED)
         goto error;
 
-    if (ioctl(simplemodule_fd, SAMODULE_IOCTL_TEST, (void*)d) != SAMODULE_SUCCESS)
+    if (ioctl(simplemodule_fd, SM_IOCTL_CALL, (void*)d) != SAMODULE_SUCCESS)
         goto error;
     goto success;
 
@@ -234,6 +235,57 @@ success:
     goto cleanup;
 cleanup:
     return ret;
+}
+
+unsigned long sm_call_function(const char* function_name, unsigned int args_count, ...) {
+    void* data_ptr;
+    unsigned int args_i;
+    va_list args;
+    sm_call_data_t sm_call_data = {0x0};
+    sm_call_data.call_number = SM_CALL_FUNCTION;
+    size_t function_name_length = strlen(function_name);
+    if (args_count > 6U) {
+        SA_LOG(MIN_VERBOSITY, "Number of arguments %u not supported.", args_count);
+        goto error;
+    }
+    size_t final_data_length = function_name_length + (size_t)(sizeof(unsigned int) + 1
+            + sizeof(unsigned long)*args_count);
+    if (final_data_length < function_name_length || final_data_length > (unsigned long)-1
+            || function_name_length == 0x0) {
+        SA_LOG(MIN_VERBOSITY, "SM_CALL_FUNCTION data length error\n");
+        goto error;
+    }
+    sm_call_data.data_length = (unsigned long)final_data_length;
+    sm_call_data.data = (void*)malloc(final_data_length);
+    if (!sm_call_data.data) {
+        SA_LOG(MIN_VERBOSITY, "SM_CALL_FUNCTION malloc error\n");
+        goto error;
+    }
+    data_ptr = sm_call_data.data;
+    strcpy((void*)((char*)data_ptr), function_name);
+    data_ptr = (char*)data_ptr + function_name_length;
+    *((char*)data_ptr) = '\0';
+    data_ptr = (char*)data_ptr + sizeof(char);
+    *((unsigned int*)data_ptr) = args_count;
+    data_ptr = (char*)data_ptr + sizeof(unsigned int);
+    va_start(args, args_count);
+    args_i = args_count;
+    while (args_i-- > 0) {
+        *((unsigned long*)data_ptr) = va_arg(args, unsigned long);
+        data_ptr = (char*)data_ptr + sizeof(unsigned long);
+    }
+    if (sm_call(&sm_call_data) == SLIB_ERROR) {
+        goto error;
+    }
+    print_module_output();
+    goto cleanup;
+error:
+    SA_LOG(MIN_VERBOSITY, "SM_CALL_FUNCTION error\n");
+cleanup:
+    if (sm_call_data.data) {
+        free(sm_call_data.data);
+    }
+    return (unsigned long)sm_call_data.return_value;
 }
 
 const char* get_path_to_file_with_base(const char* file) {
