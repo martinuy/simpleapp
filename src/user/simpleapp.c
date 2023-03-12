@@ -37,9 +37,6 @@ int main(void) {
     int ret = -1;
     SA_LOG(MAX_VERBOSITY, "main - begin\n");
 
-    if (load_module() == SLIB_ERROR)
-        goto error;
-
     BREAKPOINT(1);
 
     execute_proxied_syscall();
@@ -61,19 +58,18 @@ success:
     SA_LOG(MAX_VERBOSITY, "main - end success\n");
     ret = 0;
 cleanup:
-    unload_module();
     return ret;
 }
 
 __attribute__((noinline))
 void execute_module_asm_function(void) {
-    unsigned long ret = SMF_CALL(sm_asm_function_hook);
+    unsigned long ret = SM_CALL(sm_asm_function_hook);
     SA_LOG(MIN_VERBOSITY, "execute_module_asm_function ret: 0x%lx\n", ret);
 }
 
 __attribute__((noinline))
 void execute_module_c_function(void) {
-    unsigned long ret = SMF_CALL(sm_c_function_hook, -1);
+    unsigned long ret = SM_CALL(sm_c_function_hook, -1);
     SA_LOG(MIN_VERBOSITY, "execute_module_c_function ret: 0x%lx\n", ret);
 }
 

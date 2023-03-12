@@ -62,48 +62,7 @@ static long unlocked_ioctl(struct file* f, unsigned int cmd, unsigned long arg) 
         if ((ret_val = sm_call(arg)) == SAMODULE_ERROR)
             goto cleanup;
         break;
-    case SM_IOCTL_OUTPUT_SIZE:
-        {
-            output_t* out = NULL,* out_it = NULL;
-            mutex_lock(&outputs_lock);
-            list_for_each_entry(out_it, &outputs, list) {
-                if (out_it->pid == current->pid) {
-                    out = out_it;
-                    break;
-                }
-            }
-            if (out == NULL)
-                ret_val = 0L;
-            else
-                ret_val = (long)out->output_buffer_size;
-
-            mutex_unlock(&outputs_lock);
-        }
-        break;
-    case SM_IOCTL_OUTPUT_FLUSH:
-        {
-            output_t* out = NULL,* out_it = NULL;
-            mutex_lock(&outputs_lock);
-            list_for_each_entry(out_it, &outputs, list) {
-                if (out_it->pid == current->pid) {
-                    out = out_it;
-                    break;
-                }
-            }
-            if (out != NULL) {
-                if (copy_to_user((void*)arg, out->output_buffer,
-                        out->output_buffer_size) == 0) {
-                    ret_val = SAMODULE_SUCCESS;
-                    kfree(out->output_buffer);
-                    list_del_init(&out->list);
-                    kfree(out);
-                }
-            }
-            mutex_unlock(&outputs_lock);
-        }
-        break;
     }
-
 cleanup:
     return ret_val;
 }
@@ -184,6 +143,46 @@ static long sm_call(unsigned long arg) {
         } else {
             d.return_value = GDB_ERROR;
         }
+    } else if (d.call_number == SM_CALL_OUTPUT) {
+        output_t* out = NULL,* out_it = NULL;
+        void* buffer_ptr;
+        void* data_ptr = (void*)d.data;
+        unsigned long required_buffer_size = 0UL;
+        unsigned long buffer_size = *((unsigned long*)data_ptr);
+        data_ptr = (char*)data_ptr + sizeof(unsigned long);
+        buffer_ptr = *((void**)data_ptr);
+        mutex_lock(&outputs_lock);
+        list_for_each_entry(out_it, &outputs, list) {
+            if (out_it->pid == current->pid) {
+                out = out_it;
+                break;
+            }
+        }
+        if (out != NULL)
+            required_buffer_size = out->output_buffer_size;
+        *((unsigned long*)d.data) = required_buffer_size;
+        if (buffer_size >= required_buffer_size) {
+            out = NULL;
+            out_it = NULL;
+            list_for_each_entry(out_it, &outputs, list) {
+                if (out_it->pid == current->pid) {
+                    out = out_it;
+                    break;
+                }
+            }
+            if (out != NULL) {
+                if (copy_to_user(buffer_ptr, out->output_buffer,
+                        out->output_buffer_size) == 0) {
+                    d.return_value = SAMODULE_SUCCESS;
+                    kfree(out->output_buffer);
+                    list_del_init(&out->list);
+                    kfree(out);
+                }
+            }
+        } else {
+            d.return_value = SAMODULE_SUCCESS;
+        }
+        mutex_unlock(&outputs_lock);
     }
 
     if (d.data_length != 0x0UL) {

@@ -36,5 +36,6 @@ void post_syscall_trampoline_hook(unsigned long syscall_number,
 }
 
 unsigned long sm_c_function_hook(unsigned long arg_1) {
+    SM_LOG(MIN_VERBOSITY, "sm_c_function_hook called with arg_1 = 0x%lx\n", arg_1);
     return arg_1;
 }

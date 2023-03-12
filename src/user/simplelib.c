@@ -44,6 +44,8 @@ int simplemodule_fd = -1;
 
 typedef enum module_state_t { UNLOADED = 0, LOADED } module_state_t;
 
+static long load_module(void);
+static long unload_module(void);
 static const char* get_path_to_file_with_base(const char* file);
 static const char* get_path_to_library_directory(void);
 
@@ -80,6 +82,9 @@ static void initialize_once(void) {
         free(line);
     }
 
+    if (load_module() == SLIB_ERROR)
+        goto error;
+
     goto success;
 error:
     SA_LOG(MIN_VERBOSITY, "Error initializing simplelib\n");
@@ -89,7 +94,12 @@ success:
     return;
 }
 
-long load_module(void) {
+__attribute__((destructor))
+static void uninitialize_once(void) {
+    unload_module();
+}
+
+static long load_module(void) {
     long ret = SLIB_ERROR;
     int cret = -1;
     int simplemodule_image_fd = -1;
@@ -148,7 +158,7 @@ cleanup:
     return ret;
 }
 
-long unload_module(void) {
+static long unload_module(void) {
     long ret = SLIB_ERROR;
     int cret = -1;
 
@@ -193,23 +203,40 @@ void print_module_output(void) {
 
 const char* get_module_output(void) {
     unsigned long output_size = 0UL;
-    const char* output_buffer = NULL;
-    if (module_loaded != LOADED)
+    char* output_buffer = NULL;
+    char output_data[sizeof(unsigned long) + sizeof(void*)];
+    void* output_data_ptr = output_data;
+    sm_call_data_t sm_call_data = {0x0};
+    if (module_loaded != LOADED) {
         goto error;
-    output_size = (unsigned long)ioctl(simplemodule_fd,
-            SM_IOCTL_OUTPUT_SIZE, 0UL);
-    if (output_size == 0UL)
+    }
+    sm_call_data.data = output_data;
+    sm_call_data.data_length = sizeof(output_data);
+    sm_call_data.call_number = SM_CALL_OUTPUT;
+    *(unsigned long*)output_data_ptr = 0UL;
+    if (sm_call(&sm_call_data) == SLIB_ERROR) {
+        goto error;
+    }
+    output_size = *(unsigned long*)output_data_ptr;
+    if (output_size == 0UL) {
         goto success;
-    output_buffer = (const char*)malloc(output_size);
-    if (output_buffer == NULL)
+    }
+    output_buffer = (char*)malloc(output_size);
+    if (output_buffer == NULL) {
         goto error;
-    if (ioctl(simplemodule_fd, SM_IOCTL_OUTPUT_FLUSH,
-            (void*)output_buffer) != SAMODULE_SUCCESS)
+    }
+    output_data_ptr = output_data;
+    *(unsigned long*)output_data_ptr = output_size;
+    output_data_ptr = (char*)output_data_ptr + sizeof(unsigned long);
+    *(void**)output_data_ptr = output_buffer;
+    if (sm_call(&sm_call_data) == SLIB_ERROR) {
         goto error;
+    }
     goto success;
 error:
-    if (output_buffer != NULL)
+    if (output_buffer != NULL) {
         free((void*)output_buffer);
+    }
     output_buffer = NULL;
     goto cleanup;
 success:

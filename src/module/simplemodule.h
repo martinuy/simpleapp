@@ -51,6 +51,7 @@ typedef struct sm_call_data {
 } sm_call_data_t;
 #define SM_CALL_FUNCTION 0x1U
 #define SM_CALL_GDB 0x2U
+#define SM_CALL_OUTPUT 0x3U
 
 // SM_CALL_GDB
 #define GDB_MODE_BREAKPOINT_SET 0x1U
@@ -62,7 +63,5 @@ typedef struct sm_call_data {
 // IOCTLs
 #define SM_IOCTL_TYPE 0xA4
 #define SM_IOCTL_CALL _IOW(SM_IOCTL_TYPE, 0x00, sm_call_data_t)
-#define SM_IOCTL_OUTPUT_SIZE _IO(SM_IOCTL_TYPE, 0x01)
-#define SM_IOCTL_OUTPUT_FLUSH _IOR(SM_IOCTL_TYPE, 0x02, char)
 
 #endif // SIMPLEMODULE_H

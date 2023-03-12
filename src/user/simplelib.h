@@ -122,7 +122,7 @@
 
 extern unsigned long sm_call_function(const char* function_name, unsigned int args_count, ...);
 
-#define SMF_CALL(name, ...) \
+#define SM_CALL(name, ...) \
 ({ \
     unsigned int args_count = COUNT_ARGS(__VA_ARGS__); \
     sm_call_function(#name, args_count __VA_OPT__(,) __VA_ARGS__); \
@@ -131,8 +131,6 @@ extern unsigned long sm_call_function(const char* function_name, unsigned int ar
 extern int is_debugger_attached;
 extern int simplemodule_fd;
 
-extern long load_module(void);
-extern long unload_module(void);
 extern long sm_call(sm_call_data_t* d);
 extern void print_module_output(void);
 extern const char* get_module_output(void); // Caller must free memory
