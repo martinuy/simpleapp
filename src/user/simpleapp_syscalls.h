@@ -22,6 +22,8 @@
 #ifndef SIMPLEAPP_SYSCALLS_H
 #define SIMPLEAPP_SYSCALLS_H
 
+#include <errno.h>
+
 #define __set_errno(e) (errno = (e))
 
 /* For Linux we can use the system call table in the header file
@@ -203,7 +205,7 @@
             SM_CALL_SYSCALLS_TRAMPOLINE;                   \
     sm_call_data.data_length =                      \
             sizeof(unsigned long) *                     \
-            (COUNT_ARGS(__VA_ARGS__) + 2);              \
+            (SM_COUNT_ARGS(__VA_ARGS__) + 2);              \
     sm_call_data.data =                             \
             calloc(sm_call_data.data_length, 1);    \
     if (sm_call_data.data != NULL) {                \
@@ -213,7 +215,7 @@
                 SYS_ify (name);                         \
         param_ptr += 1;                                 \
         *((unsigned long*)param_ptr) =                  \
-                COUNT_ARGS(__VA_ARGS__);                \
+                SM_COUNT_ARGS(__VA_ARGS__);                \
         param_ptr += 1;                                 \
         FOR_EACH(MOVE_PARAM_PTR,__VA_ARGS__)            \
         if (sm_call(&sm_call_data) !=       \

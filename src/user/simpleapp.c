@@ -16,72 +16,76 @@
  */
 #define _GNU_SOURCE
 
-#include <errno.h>
 #include <fcntl.h>
-#include <sched.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
+#include <sys/types.h>
 
 #include "simplelib.h"
 #include "simplemodule.h"
 
-static void execute_module_asm_function(void);
-static void execute_module_c_function(void);
-static void execute_proxied_syscall(void);
-static void execute_direct_syscall(void);
-static void execute_direct_asm(void);
+#define LOG_END_SEPARATOR SA_LOG(MIN_VERBOSITY, "-------------------------------\n")
+
+static void kernel_asm_function(void);
+static void kernel_c_function(void);
+static void proxied_syscall(void);
+static void direct_syscall(void);
+static void direct_asm(void);
 
 int main(void) {
-    int ret = -1;
+    int ret;
     SA_LOG(MAX_VERBOSITY, "main - begin\n");
 
     BREAKPOINT(1);
 
-    execute_proxied_syscall();
+    kernel_asm_function();
 
-    execute_module_asm_function();
+    kernel_c_function();
 
-    execute_module_c_function();
+    proxied_syscall();
 
-    execute_direct_asm();
+    direct_syscall();
 
-    execute_direct_syscall();
+    direct_asm();
 
     goto success;
 error:
-    SA_LOG(MIN_VERBOSITY, "main - end error\n");
     ret = -1;
+    SA_LOG(MIN_VERBOSITY, "main - end error\n");
     goto cleanup;
 success:
-    SA_LOG(MAX_VERBOSITY, "main - end success\n");
     ret = 0;
+    SA_LOG(MAX_VERBOSITY, "main - end success\n");
 cleanup:
     return ret;
 }
 
 __attribute__((noinline))
-void execute_module_asm_function(void) {
+void kernel_asm_function(void) {
+    SA_LOG(MIN_VERBOSITY, "===== kernel_asm_function =====\n");
     unsigned long ret = SM_CALL(sm_asm_function_hook);
-    SA_LOG(MIN_VERBOSITY, "execute_module_asm_function ret: 0x%lx\n", ret);
+    SA_LOG(MIN_VERBOSITY, "Returned value: 0x%lx\n", ret);
+    LOG_END_SEPARATOR;
 }
 
 __attribute__((noinline))
-void execute_module_c_function(void) {
+void kernel_c_function(void) {
+    SA_LOG(MIN_VERBOSITY, "====== kernel_c_function ======\n");
     unsigned long ret = SM_CALL(sm_c_function_hook, -1);
-    SA_LOG(MIN_VERBOSITY, "execute_module_c_function ret: 0x%lx\n", ret);
+    SA_LOG(MIN_VERBOSITY, "Returned value: 0x%lx\n", ret);
+    LOG_END_SEPARATOR;
 }
 
 __attribute__((noinline))
-void execute_proxied_syscall(void) {
+void proxied_syscall(void) {
+    SA_LOG(MIN_VERBOSITY, "======= proxied_syscall =======\n");
     uid_t u = SM_SYS(getuid);
-    SA_LOG(MIN_VERBOSITY, "uid: %d\n", u);
+    SA_LOG(MIN_VERBOSITY, "Returned value (UID): %d\n", u);
+    LOG_END_SEPARATOR;
 }
 
 __attribute__((noinline))
-void execute_direct_syscall(void) {
-    int sys_open_fd = -1;
+void direct_syscall(void) {
+    SA_LOG(MIN_VERBOSITY, "======== direct_syscall =======\n");
+    int sys_open_fd;
     KERNEL_GDB("echo \"Setting a breakpoint in do_sys_open.\"");
     KERNEL_GDB("stopi on");
     KERNEL_BREAKPOINT_SET("do_sys_open");
@@ -89,15 +93,18 @@ void execute_direct_syscall(void) {
     if (sys_open_fd < 0)
         goto cleanup;
     else
-        SA_LOG(MIN_VERBOSITY, "sys_open_fd: %d\n", sys_open_fd);
+        SA_LOG(MIN_VERBOSITY, "Returned value (open FD): %d\n", sys_open_fd);
 cleanup:
     KERNEL_BREAKPOINT_UNSET("do_sys_open");
     if (sys_open_fd != -1)
         close(sys_open_fd);
+    LOG_END_SEPARATOR;
 }
 
 __attribute__((noinline))
-void execute_direct_asm(void) {
+void direct_asm(void) {
+    SA_LOG(MIN_VERBOSITY, "========== direct_asm =========\n");
     __asm__ __volatile__ ("cpuid\n\t" \
            : : : "rax", "rbx", "rcx", "rdx");
+    LOG_END_SEPARATOR;
 }

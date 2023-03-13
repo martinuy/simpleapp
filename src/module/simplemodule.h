@@ -64,4 +64,22 @@ typedef struct sm_call_data {
 #define SM_IOCTL_TYPE 0xA4
 #define SM_IOCTL_CALL _IOW(SM_IOCTL_TYPE, 0x00, sm_call_data_t)
 
+// FOREACH macro based on https://stackoverflow.com/a/11994395
+#define FE_0(WHAT, X) WHAT(X)
+#define FE_1(WHAT, ...) __VA_OPT__(FE_0(WHAT, __VA_ARGS__))
+#define FE_2(WHAT, X, ...) WHAT(X)FE_1(WHAT, __VA_ARGS__)
+#define FE_3(WHAT, X, ...) WHAT(X)FE_2(WHAT, __VA_ARGS__)
+#define FE_4(WHAT, X, ...) WHAT(X)FE_3(WHAT, __VA_ARGS__)
+#define FE_5(WHAT, X, ...) WHAT(X)FE_4(WHAT, __VA_ARGS__)
+#define FE_6(WHAT, X, ...) WHAT(X)FE_5(WHAT, __VA_ARGS__)
+#define GET_MACRO(_0,_1,_2,_3,_4,_5,_6,NAME,...) NAME
+#define FOR_EACH(action,...) \
+  GET_MACRO(_0,__VA_ARGS__,FE_6,FE_5,FE_4,FE_3,FE_2,FE_1,)(action,__VA_ARGS__)
+
+#define SM__COUNT_ARGS(X)                                 \
+    + 1
+
+#define SM_COUNT_ARGS(...)                                \
+    0 FOR_EACH(SM__COUNT_ARGS,__VA_ARGS__)
+
 #endif // SIMPLEMODULE_H

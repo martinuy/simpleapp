@@ -27,6 +27,51 @@
 
 #include "simplemodule_kernel_lib.h"
 
+#define SM_CALL_DECLARE_ARGS(X) \
+    unsigned long param_##X;
+
+#define SM_CALL_PREPARE_ARGS(X) \
+    param_##X = *((unsigned long*)data_ptr); \
+    data_ptr = (char*)data_ptr + sizeof(unsigned long);
+
+#define SM_CALL__SHOW_ARGS(X) \
+    , param_##X
+
+#define SM_CALL_SHOW_ARGS(X, ...) \
+    param_##X FOR_EACH(SM_CALL__SHOW_ARGS,__VA_ARGS__)
+
+#define SM_CALL__SHOW_ARGS_TYPES(X) \
+    , unsigned long
+
+#define SM_CALL_SHOW_ARGS_TYPES(X, ...) \
+    unsigned long FOR_EACH(SM_CALL__SHOW_ARGS_TYPES,__VA_ARGS__)
+
+#define SM_CALL__INVOKE_FUNCTION_PTR(name, ...) \
+({\
+    unsigned long ret; \
+    FOR_EACH(SM_CALL_DECLARE_ARGS, __VA_ARGS__) \
+    FOR_EACH(SM_CALL_PREPARE_ARGS,__VA_ARGS__) \
+    ret = ((unsigned long (*) \
+            (__VA_OPT__(SM_CALL_SHOW_ARGS_TYPES(__VA_ARGS__))))name) \
+            (__VA_OPT__(SM_CALL_SHOW_ARGS(__VA_ARGS__))); \
+    ret; \
+})
+
+#define SM_CALL_INVOKE_FUNCTION_PTR_0() \
+({ \
+    if (args_count == 0U) { \
+        d.return_value = ((unsigned long (*)(void))function_ptr)(); \
+    } \
+})
+
+#define SM_CALL_INVOKE_FUNCTION_PTR(...) \
+({ \
+    unsigned int args = SM_COUNT_ARGS(__VA_ARGS__); \
+    if (args_count == args) { \
+        d.return_value = SM_CALL__INVOKE_FUNCTION_PTR(function_ptr, __VA_ARGS__); \
+    } \
+})
+
 /////////////////////////
 // Function prototypes //
 /////////////////////////
@@ -124,12 +169,13 @@ static long sm_call(unsigned long arg) {
         args_count = *(unsigned int*)data_ptr;
         data_ptr = (char*)data_ptr + sizeof(unsigned int);
         function_ptr = (void*)sm_lookup_name(function_name);
-        if (args_count == 0) {
-            d.return_value = ((unsigned long (*)(void))function_ptr)();
-        } else if (args_count == 1) {
-            d.return_value = ((unsigned long (*)(unsigned long))function_ptr)(*(unsigned long*)data_ptr);
-        }
-        // TODO: extend to more parameters. Use a macro possibly.
+        SM_CALL_INVOKE_FUNCTION_PTR_0();
+        SM_CALL_INVOKE_FUNCTION_PTR(1);
+        SM_CALL_INVOKE_FUNCTION_PTR(1, 2);
+        SM_CALL_INVOKE_FUNCTION_PTR(1, 2, 3);
+        SM_CALL_INVOKE_FUNCTION_PTR(1, 2, 3, 4);
+        SM_CALL_INVOKE_FUNCTION_PTR(1, 2, 3, 4, 5);
+        SM_CALL_INVOKE_FUNCTION_PTR(1, 2, 3, 4, 5, 6);
     } else if (d.call_number == SM_CALL_GDB) {
         unsigned int gdb_mode = *((unsigned int*)d.data);
         const char* gdb_data = ((const char*)d.data + sizeof(unsigned int));

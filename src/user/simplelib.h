@@ -18,38 +18,19 @@
 #ifndef SIMPLELIB_H
 #define SIMPLELIB_H
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "simplemodule.h"
 
 #define SLIB_ERROR -1L
 #define SLIB_SUCCESS 0L
 
-// FOREACH macro based on https://stackoverflow.com/a/11994395
-#define FE_0(WHAT, X) WHAT(X)
-#define FE_1(WHAT, ...) __VA_OPT__(FE_0(WHAT, __VA_ARGS__))
-#define FE_2(WHAT, X, ...) WHAT(X)FE_1(WHAT, __VA_ARGS__)
-#define FE_3(WHAT, X, ...) WHAT(X)FE_2(WHAT, __VA_ARGS__)
-#define FE_4(WHAT, X, ...) WHAT(X)FE_3(WHAT, __VA_ARGS__)
-#define FE_5(WHAT, X, ...) WHAT(X)FE_4(WHAT, __VA_ARGS__)
-#define FE_6(WHAT, X, ...) WHAT(X)FE_5(WHAT, __VA_ARGS__)
-#define GET_MACRO(_0,_1,_2,_3,_4,_5,_6,NAME,...) NAME
-#define FOR_EACH(action,...) \
-  GET_MACRO(_0,__VA_ARGS__,FE_6,FE_5,FE_4,FE_3,FE_2,FE_1,)(action,__VA_ARGS__)
-
-# undef MOVE_PARAM_PTR
-# define MOVE_PARAM_PTR(X)                              \
+#define MOVE_PARAM_PTR(X)                              \
         *(unsigned long*)param_ptr = (unsigned long)X;  \
         param_ptr += 1;
-
-# undef _COUNT_ARGS
-# define _COUNT_ARGS(X)                                 \
-    + 1
-
-# undef COUNT_ARGS
-# define COUNT_ARGS(...)                                \
-    0 FOR_EACH(_COUNT_ARGS,__VA_ARGS__)
 
 #define SA_PRINTF(fmt,...) __SA_PRINTF("SimpleApp (PID: %d): " fmt, \
         getpid() __VA_OPT__(,) __VA_ARGS__)
@@ -124,7 +105,7 @@ extern unsigned long sm_call_function(const char* function_name, unsigned int ar
 
 #define SM_CALL(name, ...) \
 ({ \
-    unsigned int args_count = COUNT_ARGS(__VA_ARGS__); \
+    unsigned int args_count = SM_COUNT_ARGS(__VA_ARGS__); \
     sm_call_function(#name, args_count __VA_OPT__(,) __VA_ARGS__); \
 })
 
