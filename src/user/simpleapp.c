@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020, 2022
+ *   Martin Balao (martin.uy) - Copyright 2020, 2023
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -16,97 +16,77 @@
  */
 #define _GNU_SOURCE
 
-#include <errno.h>
 #include <fcntl.h>
-#include <sched.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
-#include "simpleapp_syscalls.h"
 #include "simplelib.h"
 #include "simplemodule.h"
 
-static void execute_module_asm_hook(void);
-static void execute_module_code_hook(void);
-static void execute_proxied_syscalls_hook(void);
-static void execute_direct_syscalls_hook(void);
-static void execute_direct_asm_hook(void);
-
 int main(void) {
-    int ret = -1;
+    int ret;
     SA_LOG(MAX_VERBOSITY, "main - begin\n");
 
-    if (load_module() == SLIB_ERROR)
+    //SM_CALL(show_memory_structures);
+
+    void* new_mmaped_page = MAP_FAILED;
+    void* mmaped_page = MAP_FAILED;
+    void* mmaped_struct_page = NULL;
+    int i = 0;
+    long child = 0L;
+    int status_code = 0;
+    long mmap_allocation_chunk = sysconf(_SC_PAGE_SIZE)*2;
+    mmaped_page = (void*)SM_SYS(mmap, NULL, mmap_allocation_chunk, PROT_READ | PROT_WRITE,
+            MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
+    if (mmaped_page == MAP_FAILED) {
         goto error;
-
-    BREAKPOINT(1);
-
-    execute_proxied_syscalls_hook();
-
-    execute_module_asm_hook();
-
-    execute_module_code_hook();
-
-    execute_direct_asm_hook();
-
-    execute_direct_syscalls_hook();
-
+    }
+    SA_LOG(MIN_VERBOSITY, "mmaped area: %p\n", mmaped_page);
+    for (i = 0; i < mmap_allocation_chunk / sizeof(int); i++) {
+        ((int*)mmaped_page)[i] = 0;
+    }
+    child = fork();
+    if (child == 0) {
+        KERNEL_GDB("stopi on");
+        mmaped_struct_page = (void*)(SM_CALL(get_struct_page, (unsigned long)mmaped_page));
+        KERNEL_GDB("print *(struct page*)%p", mmaped_struct_page);
+        KERNEL_BREAKPOINT_SET("handle_mm_fault");
+        // Force a copy-on-write of the 1st page in the child process.
+        ((int*)mmaped_page)[0] = 1;
+        KERNEL_BREAKPOINT_UNSET("handle_mm_fault");
+        mmaped_struct_page = (void*)(SM_CALL(get_struct_page, (unsigned long)mmaped_page));
+        KERNEL_GDB("print *(struct page*)%p", mmaped_struct_page);
+        // Append new pages to the mmaped area in the child process.
+        void* new_mmaped_page = (void*)SM_SYS(mmap, ((char*)mmaped_page) + mmap_allocation_chunk,
+                mmap_allocation_chunk, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED, 0, 0);
+        if (new_mmaped_page == MAP_FAILED) {
+            goto error;
+        }
+        SA_LOG(MIN_VERBOSITY, "New mmaped area: %p\n", new_mmaped_page);
+        for (i = 0; i < mmap_allocation_chunk / sizeof(int); i++) {
+            ((int*)new_mmaped_page)[i] = 0;
+        }
+    } else {
+        SA_LOG(MIN_VERBOSITY, "child (fork): %ld\n", child);
+        if (waitpid(-1, &status_code, 0) == -1) {
+            SA_LOG(MIN_VERBOSITY, "Waitpid failed\n");
+        }
+    }
     goto success;
 error:
-    SA_LOG(MIN_VERBOSITY, "main - end error\n");
     ret = -1;
+    SA_LOG(MIN_VERBOSITY, "main - end error\n");
     goto cleanup;
 success:
-    SA_LOG(MAX_VERBOSITY, "main - end success\n");
     ret = 0;
+    SA_LOG(MAX_VERBOSITY, "main - end success\n");
 cleanup:
-    unload_module();
-    return ret;
-}
-
-__attribute__((noinline))
-void execute_module_asm_hook(void) {
-}
-
-__attribute__((noinline))
-void execute_module_code_hook(void) {
-    module_test_data_t module_test_data = {0x0};
-    module_test_data.test_number = TEST_MODULE_CODE;
-    if (run_module_test(&module_test_data) == SLIB_ERROR)
-        goto error;
-    print_module_output();
-    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_CODE return: 0x%lx\n", module_test_data.return_value);
-    return;
-error:
-    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_CODE error\n");
-}
-
-#include <sys/mman.h>
-
-__attribute__((noinline))
-void execute_proxied_syscalls_hook(void) {
-    int i = 0;
-    void* mmaped_page = (void*)SM_SYS(mmap, NULL, sysconf(_SC_PAGE_SIZE)*10, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
     if (mmaped_page != MAP_FAILED) {
-        for (i = 0; i < (sysconf(_SC_PAGE_SIZE)*10) / sizeof(int); i++) {
-            if (((int*)mmaped_page)[i] != 0) {
-                SA_LOG(MIN_VERBOSITY, "BYTE != 0x0\n");
-            }
-            ((int*)mmaped_page)[i] = 0;
-        }
-        SA_LOG(MIN_VERBOSITY, "Zero-check finished\n");
-        SM_SYS(munmap, mmaped_page, sysconf(_SC_PAGE_SIZE)*10);
-    } else {
-        SA_LOG(MIN_VERBOSITY, "mmap failed\n");
+        SM_SYS(munmap, mmaped_page, mmap_allocation_chunk);
     }
-}
-
-__attribute__((noinline))
-void execute_direct_syscalls_hook(void) {
-}
-
-__attribute__((noinline))
-void execute_direct_asm_hook(void) {
+    if (new_mmaped_page != MAP_FAILED) {
+        SM_SYS(munmap, new_mmaped_page, mmap_allocation_chunk);
+    }
+    return ret;
 }

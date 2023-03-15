@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020
+ *   Martin Balao (martin.uy) - Copyright 2020, 2023
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -18,13 +18,19 @@
 #ifndef SIMPLELIB_H
 #define SIMPLELIB_H
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "simplemodule.h"
 
 #define SLIB_ERROR -1L
 #define SLIB_SUCCESS 0L
+
+#define MOVE_PARAM_PTR(X)                              \
+        *(unsigned long*)param_ptr = (unsigned long)X;  \
+        param_ptr += 1;
 
 #define SA_PRINTF(fmt,...) __SA_PRINTF("SimpleApp (PID: %d): " fmt, \
         getpid() __VA_OPT__(,) __VA_ARGS__)
@@ -46,30 +52,30 @@
 
 #define __KERNEL_GDB_CMD(gdb_mode, gdb_data) \
  do { \
-     module_test_data_t module_test_data = {0x0}; \
+     sm_call_data_t sm_call_data = {0x0}; \
      size_t data_length = strlen(gdb_data); \
      size_t final_data_length = data_length + (size_t)(sizeof(unsigned int) + 1); \
      if (final_data_length < data_length || final_data_length > (unsigned long)-1 \
              || data_length == 0x0) { \
-         SA_LOG(MIN_VERBOSITY, "TEST_MODULE_GDB gdb_data length error\n"); \
+         SA_LOG(MIN_VERBOSITY, "SM_CALL_GDB gdb_data length error\n"); \
          break; \
      } \
-     module_test_data.data_length = (unsigned long)final_data_length; \
-     module_test_data.data = (void*)malloc(final_data_length); \
-     if (!final_data_length) { \
-         SA_LOG(MIN_VERBOSITY, "TEST_MODULE_GDB malloc error\n"); \
+     sm_call_data.data_length = (unsigned long)final_data_length; \
+     sm_call_data.data = (void*)malloc(final_data_length); \
+     if (!sm_call_data.data) { \
+         SA_LOG(MIN_VERBOSITY, "SM_CALL_GDB malloc error\n"); \
          break; \
      } \
-     *((char*)(module_test_data.data) + module_test_data.data_length - 1) = '\0'; \
-     *((unsigned int*)module_test_data.data) = (unsigned int)gdb_mode; \
-     strcpy((void*)((char*)module_test_data.data + sizeof(unsigned int)), gdb_data); \
-     module_test_data.test_number = TEST_MODULE_GDB; \
-     if (run_module_test(&module_test_data) != SLIB_ERROR && \
-             module_test_data.return_value != GDB_ERROR) \
+     *((char*)(sm_call_data.data) + sm_call_data.data_length - 1) = '\0'; \
+     *((unsigned int*)sm_call_data.data) = (unsigned int)gdb_mode; \
+     strcpy((void*)((char*)sm_call_data.data + sizeof(unsigned int)), gdb_data); \
+     sm_call_data.call_number = SM_CALL_GDB; \
+     if (sm_call(&sm_call_data) != SLIB_ERROR && \
+             sm_call_data.return_value != GDB_ERROR) \
          print_module_output(); \
      else \
-         SA_LOG(MIN_VERBOSITY, "TEST_MODULE_GDB error in module\n"); \
-     free(module_test_data.data); \
+         SA_LOG(MIN_VERBOSITY, "SM_CALL_GDB error in module\n"); \
+     free(sm_call_data.data); \
  } while(0)
 
 #define KERNEL_BREAKPOINT_SET(function_name) \
@@ -82,18 +88,34 @@
      __KERNEL_GDB_CMD(GDB_MODE_BREAKPOINT_UNSET, function_name); \
  } while(0)
 
-#define KERNEL_GDB(gdb_cmd) \
+#define KERNEL_GDB(gdb_cmd, ...) \
  do { \
-     __KERNEL_GDB_CMD(GDB_MODE_BREAKPOINT_GDB, gdb_cmd); \
+     char* gdb_cmd_final = NULL; \
+     int bytes_required = 0; \
+     bytes_required = snprintf(NULL, 0, gdb_cmd __VA_OPT__(,) __VA_ARGS__) + 1; \
+     gdb_cmd_final = malloc(bytes_required); \
+     if (gdb_cmd_final != NULL) { \
+         snprintf(gdb_cmd_final, bytes_required, gdb_cmd __VA_OPT__(,) __VA_ARGS__); \
+         __KERNEL_GDB_CMD(GDB_MODE_BREAKPOINT_GDB, gdb_cmd_final); \
+         free(gdb_cmd_final); \
+     } \
  } while(0)
+
+extern unsigned long sm_call_function(const char* function_name, unsigned int args_count, ...);
+
+#define SM_CALL(name, ...) \
+({ \
+    unsigned int args_count = SM_COUNT_ARGS(__VA_ARGS__); \
+    sm_call_function(#name, args_count __VA_OPT__(,) __VA_ARGS__); \
+})
 
 extern int is_debugger_attached;
 extern int simplemodule_fd;
 
-extern long load_module(void);
-extern long unload_module(void);
-extern long run_module_test(module_test_data_t* d);
+extern long sm_call(sm_call_data_t* d);
 extern void print_module_output(void);
 extern const char* get_module_output(void); // Caller must free memory
+
+#include "simpleapp_syscalls.h"
 
 #endif // SIMPLELIB_H
