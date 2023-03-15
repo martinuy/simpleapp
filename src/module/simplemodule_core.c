@@ -178,14 +178,16 @@ static long sm_call(unsigned long arg) {
         SM_CALL_INVOKE_FUNCTION_PTR(1, 2, 3, 4, 5, 6);
     } else if (d.call_number == SM_CALL_GDB) {
         unsigned int gdb_mode = *((unsigned int*)d.data);
-        const char* gdb_data = ((const char*)d.data + sizeof(unsigned int));
+        void* gdb_data = ((char*)d.data + sizeof(unsigned int));
         d.return_value = GDB_SUCCESS;
-        if (gdb_mode == GDB_MODE_BREAKPOINT_GDB) {
-            sm_gdb(gdb_data);
+        if (gdb_mode == GDB_MODE_BREAKPOINT) {
+            sm_debug(*((int*)gdb_data));
+        } else if (gdb_mode == GDB_MODE_BREAKPOINT_GDB) {
+            sm_gdb((const char*)gdb_data);
         } else if (gdb_mode == GDB_MODE_BREAKPOINT_SET) {
-            sm_breakpoint_set(gdb_data);
+            sm_breakpoint_set((const char*)gdb_data);
         } else if (gdb_mode == GDB_MODE_BREAKPOINT_UNSET) {
-            sm_breakpoint_unset(gdb_data);
+            sm_breakpoint_unset((const char*)gdb_data);
         } else {
             d.return_value = GDB_ERROR;
         }

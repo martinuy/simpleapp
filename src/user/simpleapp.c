@@ -51,12 +51,14 @@ int main(void) {
         KERNEL_GDB("stopi on");
         mmaped_struct_page = (void*)(SM_CALL(get_struct_page, (unsigned long)mmaped_page));
         KERNEL_GDB("print *(struct page*)%p", mmaped_struct_page);
+        KERNEL_BREAKPOINT(1);
         KERNEL_BREAKPOINT_SET("handle_mm_fault");
         // Force a copy-on-write of the 1st page in the child process.
         ((int*)mmaped_page)[0] = 1;
         KERNEL_BREAKPOINT_UNSET("handle_mm_fault");
         mmaped_struct_page = (void*)(SM_CALL(get_struct_page, (unsigned long)mmaped_page));
         KERNEL_GDB("print *(struct page*)%p", mmaped_struct_page);
+        KERNEL_BREAKPOINT(2);
         // Append new pages to the mmaped area in the child process.
         void* new_mmaped_page = (void*)SM_SYS(mmap, ((char*)mmaped_page) + mmap_allocation_chunk,
                 mmap_allocation_chunk, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED, 0, 0);
