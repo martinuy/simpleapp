@@ -89,6 +89,7 @@ void direct_syscall(void) {
     KERNEL_GDB("echo \"Setting a breakpoint in do_sys_open.\"");
     KERNEL_GDB("stopi on");
     KERNEL_BREAKPOINT_SET("do_sys_open");
+    KERNEL_BREAKPOINT(2);
     sys_open_fd = _sys_open("/proc/self/exe", O_RDONLY, 0);
     if (sys_open_fd < 0)
         goto cleanup;
