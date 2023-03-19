@@ -20,7 +20,7 @@
 
 #include <linux/syscalls.h>
 
-const char* get_syscall_name(unsigned long sys_code) {
+const char* sm_get_syscall_name(unsigned long sys_code) {
     switch(sys_code) {
     #define syscode_case(x) case __NR_##x: return "SYS_"#x;
         // From Linux 4.14.0 headers (x86_64)

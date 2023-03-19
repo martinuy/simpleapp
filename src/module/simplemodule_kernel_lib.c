@@ -41,7 +41,7 @@ __attribute__((used, optimize("O0")))
 noinline void sm_gdb(const char* cmd) {
 }
 
-void print_mem_area(const char* name, void* s, size_t l) {
+void sm_print_memory(const char* name, void* s, size_t l) {
     size_t i = 0;
     SM_PRINTF("%s:\n", name);
     for (; i < l; i++) {

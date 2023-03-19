@@ -134,7 +134,7 @@ static long sm_call(unsigned long arg) {
             unsigned long args_count = *(data_ptr++), args_i = 0x0UL;
             struct pt_regs regs = {0x0};
             unsigned long syscall_args[6] = {0x0};
-            SM_LOG(MIN_VERBOSITY, "%s\n", get_syscall_name(syscall_number));
+            SM_LOG(MIN_VERBOSITY, "%s\n", sm_get_syscall_name(syscall_number));
             while (args_i < args_count)
                 syscall_args[args_i++] = *(data_ptr++);
             preempt_disable();
@@ -192,7 +192,7 @@ static long sm_call(unsigned long arg) {
             d.return_value = GDB_ERROR;
         }
     } else if (d.call_number == SM_CALL_OUTPUT) {
-        output_t* out = NULL,* out_it = NULL;
+        sm_output_t* out = NULL,* out_it = NULL;
         void* buffer_ptr;
         void* data_ptr = (void*)d.data;
         unsigned long required_buffer_size = 0UL;
@@ -269,7 +269,7 @@ static void __exit simplemodule_cleanup(void) {
         unregister_chrdev_region(simplemodule_devt, 1);
 
     {
-        output_t* out = NULL,* tmp_node = NULL;
+        sm_output_t* out = NULL,* tmp_node = NULL;
         list_for_each_entry_safe(out, tmp_node, &outputs, list) {
             kfree(out->output_buffer);
             list_del_init(&out->list);
