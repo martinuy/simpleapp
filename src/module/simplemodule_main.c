@@ -116,7 +116,7 @@ unsigned long show_memory_structures(void) {
     SM_PRINTF("PAGE 0 -> virtual address: 0x%px\n", page_to_virt(p0));
     SM_PRINTF("PAGE 0 -> phys address: 0x%lx\n", __pa(page_to_virt(p0)));
     SM_PRINTF("PAGE 0 -> mem_section: 0x%px\n", __pfn_to_section(page_to_pfn(p0)));
-    print_mem_area("PAGE 0 (first bytes)", (char*)page_to_virt(p0), 16);
+    sm_print_memory("PAGE 0 (first bytes)", (char*)page_to_virt(p0), 16);
     SM_PRINTF("PAGE 1 -> struct page*: 0x%px\n", p1);
     SM_PRINTF("PAGE 1 -> virtual address: 0x%px\n", page_to_virt(p1));
     SM_PRINTF("PAGE 1 -> phys address: 0x%lx\n", __pa(page_to_virt(p1)));
@@ -164,7 +164,7 @@ unsigned long show_memory_structures(void) {
     //BREAKPOINT_SET("__zone_watermark_ok");
     //GDB("break *(get_page_from_freelist+3195)"); // --> in rbp there is the struct page* page from page_alloc.c#L2193
     pn = alloc_pages(GFP_USER, 1);
-    print_mem_area("GFP_USER page", page_to_virt(pn), 32);
+    sm_print_memory("GFP_USER page", page_to_virt(pn), 32);
     //BREAKPOINT_UNSET("__zone_watermark_ok");
     //BREAKPOINT_UNSET("get_page_from_freelist");
     //BREAKPOINT_UNSET("__alloc_pages_nodemask");
