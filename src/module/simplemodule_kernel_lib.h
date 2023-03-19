@@ -31,7 +31,7 @@
 #define __SM_PRINTF(fmt,...) \
  do { \
      int bytes_required = 0; \
-     output_t* out = NULL,* out_it = NULL; \
+     sm_output_t* out = NULL,* out_it = NULL; \
      bytes_required = snprintf(NULL, 0, fmt __VA_OPT__(,) __VA_ARGS__); \
      mutex_lock(&outputs_lock); \
      list_for_each_entry(out_it, &outputs, list) { \
@@ -41,7 +41,7 @@
          } \
      } \
      if (out == NULL) { \
-         out = (output_t*)kmalloc(sizeof(output_t), GFP_KERNEL); \
+         out = (sm_output_t*)kmalloc(sizeof(sm_output_t), GFP_KERNEL); \
          out->pid = current->pid; \
          out->output_buffer_size = sizeof(char) * (bytes_required + 1); \
          out->output_buffer = kmalloc(out->output_buffer_size, GFP_KERNEL); \
@@ -85,12 +85,12 @@
     } \
  } while(0)
 
-typedef struct output {
+typedef struct sm_output {
      pid_t pid;
      char* output_buffer;
      unsigned long output_buffer_size;
      struct list_head list;
-} output_t;
+} sm_output_t;
 
 extern struct list_head outputs;
 extern struct mutex outputs_lock;
@@ -100,8 +100,8 @@ extern void sm_breakpoint_set(const char* sym);
 extern void sm_breakpoint_unset(const char* sym);
 extern void sm_gdb(const char* cmd);
 
-extern const char* get_syscall_name(unsigned long sys_code);
+extern const char* sm_get_syscall_name(unsigned long sys_code);
 extern unsigned long sm_lookup_name(const char* sym);
-extern void print_mem_area(const char* name, void* s, size_t l);
+extern void sm_print_memory(const char* name, void* s, size_t l);
 
 #endif // SIMPLEMODULE_KERNEL_LIB_H

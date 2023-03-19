@@ -104,8 +104,15 @@ cleanup:
 
 __attribute__((noinline))
 void direct_asm(void) {
+    unsigned long rax = 0UL, rbx = 0UL, rcx = 0UL, rdx = 0UL;
     SA_LOG(MIN_VERBOSITY, "========== direct_asm =========\n");
-    __asm__ __volatile__ ("cpuid\n\t" \
-           : : : "rax", "rbx", "rcx", "rdx");
+    __asm__ __volatile__ (\
+            "cpuid\n\t" \
+            "mov %%rax, %0\n\t" \
+            : "=a" (rax), "=b" (rbx) \
+            : "a"(rax) \
+            : "rcx", "rdx");
+    SA_LOG(MIN_VERBOSITY, "eax: 0x%lx - ebx: 0x%lx\n", (rax & (unsigned int)-1),
+            (rbx & (unsigned int)-1));
     LOG_END_SEPARATOR;
 }
