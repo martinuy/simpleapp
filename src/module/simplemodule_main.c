@@ -19,7 +19,7 @@
 
 #include "simplemodule_kernel_lib.h"
 
-void pre_syscall_trampoline_hook(unsigned long syscall_number,
+noinline void pre_syscall_trampoline_hook(unsigned long syscall_number,
         unsigned long syscall_args[]) {
     if (syscall_number == __NR_getuid) {
         GDB("print ((struct task_struct*)(0x%px))->pid", current);
@@ -28,7 +28,7 @@ void pre_syscall_trampoline_hook(unsigned long syscall_number,
     }
 }
 
-void post_syscall_trampoline_hook(unsigned long syscall_number,
+noinline void post_syscall_trampoline_hook(unsigned long syscall_number,
         unsigned long syscall_args[], unsigned long return_value) {
     if (syscall_number == __NR_getuid) {
         BREAKPOINT_UNSET("from_kuid");
