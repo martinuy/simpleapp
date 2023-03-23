@@ -66,7 +66,12 @@
          SM_PRINTF(args); \
  } while(0)
 
-#define BREAKPOINT(NUM) sm_debug(NUM)
+#define BREAKPOINT(NUM) \
+  __asm__ __volatile__( \
+          "mov $"#NUM", %%rdi\n" \
+          "call %P0\n" \
+          : : "i"(sm_debug) : "rdi" \
+  );
 
 #define BREAKPOINT_SET(SYM) sm_breakpoint_set(SYM)
 
