@@ -21,18 +21,19 @@
 
 #include "simplemodule_kernel_lib.h"
 
-void pre_syscall_trampoline_hook(unsigned long syscall_number,
+noinline void pre_syscall_trampoline_hook(unsigned long syscall_number,
         unsigned long syscall_args[]) {
     if (syscall_number == __NR_mmap) {
-        BREAKPOINT_SET("mmap_region");
+        BREAKPOINT(1);
+        //BREAKPOINT_SET("mmap_region");
         //BREAKPOINT_SET("__alloc_pages_nodemask");
     }
 }
 
-void post_syscall_trampoline_hook(unsigned long syscall_number,
+noinline void post_syscall_trampoline_hook(unsigned long syscall_number,
         unsigned long syscall_args[], unsigned long return_value) {
     if (syscall_number == __NR_mmap) {
-        BREAKPOINT_UNSET("mmap_region");
+        //BREAKPOINT_UNSET("mmap_region");
         //GDB("stopi on");
         //BREAKPOINT_SET("handle_mm_fault");
         //BREAKPOINT_SET("__alloc_pages_nodemask");
