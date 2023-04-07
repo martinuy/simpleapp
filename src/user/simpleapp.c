@@ -84,27 +84,27 @@ static int fork_copy_on_write_test(void) {
     }
     SA_LOG(MIN_VERBOSITY, "mmaped area: 0x%p\n", mmaped_page);
     // Generate the actual memory allocation
-    KERNEL_GDB("stopi on");
     KERNEL_BREAKPOINT_SET("handle_mm_fault");
     KERNEL_BREAKPOINT_SET("__alloc_pages_nodemask");
+    KERNEL_GDB("stopi on");
     *((char*)mmaped_page) = 1;
+    KERNEL_GDB("stopi off");
     KERNEL_BREAKPOINT_UNSET("__alloc_pages_nodemask");
     KERNEL_BREAKPOINT_UNSET("handle_mm_fault");
-    KERNEL_GDB("stopi off");
     *((char*)mmaped_page + page_size) = 2;
     child = fork();
     if (child == 0) {
         mmaped_struct_page = (void*)(SM_CALL(get_struct_page, (unsigned long)mmaped_page));
         KERNEL_GDB("print *(struct page*)%p", mmaped_struct_page);
         KERNEL_BREAKPOINT(1);
-        KERNEL_GDB("stopi on");
         KERNEL_BREAKPOINT_SET("handle_mm_fault");
         KERNEL_BREAKPOINT_SET("__alloc_pages_nodemask");
+        KERNEL_GDB("stopi on");
         // Force a copy-on-write of the 1st page in the child process.
         ((char*)mmaped_page)[0] = 3;
+        KERNEL_GDB("stopi off");
         KERNEL_BREAKPOINT_UNSET("__alloc_pages_nodemask");
         KERNEL_BREAKPOINT_UNSET("handle_mm_fault");
-        KERNEL_GDB("stopi off");
         mmaped_struct_page = (void*)(SM_CALL(get_struct_page, (unsigned long)mmaped_page));
         KERNEL_GDB("print *(struct page*)%p", mmaped_struct_page);
         KERNEL_BREAKPOINT(2);
@@ -147,7 +147,6 @@ static int merge_vma_area_structs_test(void) {
             page_size);
     SA_LOG(MIN_VERBOSITY, "mmaped_page: %p\n", mmaped_page);
     req_new_mmaped_page = (void*)(((char*)mmaped_page) + mmap_allocation_chunk);
-    KERNEL_GDB("stopi off");
     KERNEL_BREAKPOINT_SET("vma_merge");
     KERNEL_BREAKPOINT_SET("is_mergeable_anon_vma");
     KERNEL_BREAKPOINT_SET("__vma_adjust");
