@@ -157,7 +157,6 @@ static int merge_vma_area_structs_test(void) {
     KERNEL_BREAKPOINT_UNSET("__vma_adjust");
     KERNEL_BREAKPOINT_UNSET("is_mergeable_anon_vma");
     KERNEL_BREAKPOINT_UNSET("vma_merge");
-    KERNEL_GDB("stopi on");
     if (new_mmaped_page != req_new_mmaped_page || new_mmaped_page == MAP_FAILED) {
         new_mmaped_page = MAP_FAILED;
         goto error;
