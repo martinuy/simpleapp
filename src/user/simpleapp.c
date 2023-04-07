@@ -146,22 +146,20 @@ static int merge_vma_area_structs_test(void) {
     SM_SYS(munmap, ((char*)mmaped_page) + mmap_allocation_chunk,
             page_size);
     SA_LOG(MIN_VERBOSITY, "mmaped_page: %p\n", mmaped_page);
+    req_new_mmaped_page = (void*)(((char*)mmaped_page) + mmap_allocation_chunk);
     KERNEL_GDB("stopi off");
     KERNEL_BREAKPOINT_SET("vma_merge");
     KERNEL_BREAKPOINT_SET("is_mergeable_anon_vma");
     KERNEL_BREAKPOINT_SET("__vma_adjust");
-    req_new_mmaped_page = (void*)(((char*)mmaped_page) + mmap_allocation_chunk);
     new_mmaped_page = (void*)SM_SYS(mmap, req_new_mmaped_page,
                 page_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS |
                 MAP_PRIVATE | MAP_FIXED_NOREPLACE, 0, 0);
-    if (new_mmaped_page != req_new_mmaped_page) {
-        new_mmaped_page = MAP_FAILED;
-    }
     KERNEL_BREAKPOINT_UNSET("__vma_adjust");
     KERNEL_BREAKPOINT_UNSET("is_mergeable_anon_vma");
     KERNEL_BREAKPOINT_UNSET("vma_merge");
     KERNEL_GDB("stopi on");
-    if (new_mmaped_page == MAP_FAILED) {
+    if (new_mmaped_page != req_new_mmaped_page || new_mmaped_page == MAP_FAILED) {
+        new_mmaped_page = MAP_FAILED;
         goto error;
     }
     SA_LOG(MIN_VERBOSITY, "new_mmaped_page: %p\n", new_mmaped_page);
