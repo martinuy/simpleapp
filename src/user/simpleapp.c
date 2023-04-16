@@ -34,6 +34,7 @@
 static int merge_vma_area_structs_test(void);
 static int dump_memory_structures_test(void);
 static int fork_copy_on_write_test(void);
+static int file_backed_memory_allocation_test(void);
 
 static long page_size;
 
@@ -57,6 +58,8 @@ int main(void) {
 
     EXECUTE_TEST(fork_copy_on_write_test);
 
+    EXECUTE_TEST(file_backed_memory_allocation_test);
+
     goto success;
 error:
     ret = TEST_ERROR;
@@ -73,7 +76,7 @@ static int fork_copy_on_write_test(void) {
     int ret = TEST_ERROR;
     void* mmaped_page = MAP_FAILED;
     long mmap_allocation_chunk = page_size * 2;
-    void* mmaped_struct_page = NULL;
+    void* mmapped_struct_page = NULL;
     int i = 0;
     long child = 0L;
     int status_code = 0;
@@ -94,8 +97,8 @@ static int fork_copy_on_write_test(void) {
     *((char*)mmaped_page + page_size) = 2;
     child = fork();
     if (child == 0) {
-        mmaped_struct_page = (void*)(SM_CALL(get_struct_page, (unsigned long)mmaped_page));
-        KERNEL_GDB("print *(struct page*)%p", mmaped_struct_page);
+        mmapped_struct_page = (void*)(SM_CALL(get_struct_page, (unsigned long)mmaped_page));
+        KERNEL_GDB("print *(struct page*)%p", mmapped_struct_page);
         KERNEL_BREAKPOINT(1);
         KERNEL_BREAKPOINT_SET("handle_mm_fault");
         KERNEL_BREAKPOINT_SET("__alloc_pages_nodemask");
@@ -105,8 +108,8 @@ static int fork_copy_on_write_test(void) {
         KERNEL_GDB("stopi off");
         KERNEL_BREAKPOINT_UNSET("__alloc_pages_nodemask");
         KERNEL_BREAKPOINT_UNSET("handle_mm_fault");
-        mmaped_struct_page = (void*)(SM_CALL(get_struct_page, (unsigned long)mmaped_page));
-        KERNEL_GDB("print *(struct page*)%p", mmaped_struct_page);
+        mmapped_struct_page = (void*)(SM_CALL(get_struct_page, (unsigned long)mmaped_page));
+        KERNEL_GDB("print *(struct page*)%p", mmapped_struct_page);
         KERNEL_BREAKPOINT(2);
     } else {
         SA_LOG(MIN_VERBOSITY, "child (fork): %ld\n", child);
@@ -180,4 +183,125 @@ cleanup:
 static int dump_memory_structures_test(void) {
     SM_CALL(show_memory_structures);
     return TEST_SUCCESS;
+}
+
+static int file_backed_memory_allocation_test(void) {
+    #define TEST_FILE_DIR_PATH "/tmp/"
+    //#define TEST_FILE_DIR_PATH "/home/test/tmp/"
+    #define TEST_FILE_NAME "mapped_reading_test_file"
+    #define TEST_FILE_CONTENT "abc"
+    int ret = TEST_ERROR;
+    char buff[4096];
+    void* test_file_mmapped_addr = MAP_FAILED;
+    void* mmapped_struct_page = NULL;
+    int bytes_read;
+    char byte_read_from_memory;
+
+    // Create file, write some content, read to check and reset cursor.
+    int test_file_fd = SM_SYS(open, TEST_FILE_DIR_PATH TEST_FILE_NAME,
+            O_CREAT | O_TRUNC | O_RDWR | O_SYNC, 0);
+    SA_LOG(MIN_VERBOSITY, "test_file_fd: %d\n", test_file_fd);
+    if (test_file_fd == -1) {
+        SA_LOG(MIN_VERBOSITY, "Error creating the test file\n");
+        goto error;
+    }
+    if (SM_SYS(ftruncate, test_file_fd, page_size) == -1) {
+        SA_LOG(MIN_VERBOSITY, "Error truncating the test file to %d\n", page_size);
+        goto error;
+    }
+    memset(buff, 0, sizeof(buff));
+    if (SM_SYS(lseek, test_file_fd, 0, SEEK_SET) == (off_t) -1) {
+        SA_LOG(MIN_VERBOSITY, "Error lseeking the test file.\n");
+        goto error;
+    }
+    KERNEL_BREAKPOINT_SET("__alloc_pages_nodemask");
+    // See if the read generates a struct page allocation
+    bytes_read = SM_SYS(read, test_file_fd, buff, 1);
+    KERNEL_BREAKPOINT_UNSET("__alloc_pages_nodemask");
+    if (bytes_read != 1) {
+        SA_LOG(MIN_VERBOSITY, "Bytes read different than expected.\n");
+        goto error;
+    }
+    SA_LOG(MIN_VERBOSITY, "Char read from memory: 0x%x\n", ((int)buff[0]) & 0xFF);
+    if (SM_SYS(lseek, test_file_fd, 0, SEEK_SET) == (off_t) -1) {
+        SA_LOG(MIN_VERBOSITY, "Error lseeking the test file.\n");
+        goto error;
+    }
+    memset(buff, 0, sizeof(buff));
+    strcpy(buff, TEST_FILE_CONTENT);
+    int bytes_to_be_written = strlen(buff);
+    KERNEL_BREAKPOINT_SET("__alloc_pages_nodemask");
+    int bytes_written = SM_SYS(write, test_file_fd, buff, bytes_to_be_written);
+    KERNEL_BREAKPOINT_UNSET("__alloc_pages_nodemask");
+    if (bytes_written != bytes_to_be_written) {
+        SA_LOG(MIN_VERBOSITY, "Error writing test file. Expected to be written: %d," \
+                " Actually written: %d\n", bytes_to_be_written, bytes_written);
+        goto error;
+    }
+    memset(buff, 0, sizeof(buff));
+    if (SM_SYS(lseek, test_file_fd, 0, SEEK_SET) == (off_t) -1) {
+        SA_LOG(MIN_VERBOSITY, "Error lseeking the test file.\n");
+        goto error;
+    }
+    bytes_read = SM_SYS(read, test_file_fd, buff, bytes_to_be_written);
+    if (bytes_read != bytes_to_be_written) {
+        SA_LOG(MIN_VERBOSITY, "Error reading the test file. Expected to be read: %d," \
+                " Actually read: %d\n", bytes_to_be_written, bytes_read);
+        goto error;
+    }
+    SA_LOG(MIN_VERBOSITY, "Test file read content: %s\n", buff);
+    if (strcmp(buff, TEST_FILE_CONTENT) != 0) {
+        SA_LOG(MIN_VERBOSITY, "Test file content read is different than expected\n");
+        goto error;
+    }
+
+    // Create file mappings
+    KERNEL_BREAKPOINT_SET("do_mmap");
+    KERNEL_BREAKPOINT_SET("mmap_region");
+    test_file_mmapped_addr = (void*)SM_SYS(mmap, NULL, page_size, PROT_READ, MAP_SHARED, test_file_fd, 0);
+    KERNEL_BREAKPOINT_UNSET("mmap_region");
+    KERNEL_BREAKPOINT_UNSET("do_mmap");
+    if (test_file_mmapped_addr == MAP_FAILED) {
+        SA_LOG(MIN_VERBOSITY, "Test file mapping failed\n");
+        goto error;
+    } else {
+        SA_LOG(MIN_VERBOSITY, "test_file_mmapped_addr: %p\n", test_file_mmapped_addr);
+    }
+
+    // Read from memory and from file
+    byte_read_from_memory = *((const char*)test_file_mmapped_addr);
+    SA_LOG(MIN_VERBOSITY, "Char read from memory: %c\n", byte_read_from_memory);
+    memset(buff, 0, sizeof(buff));
+    if (SM_SYS(lseek, test_file_fd, 0, SEEK_SET) == (off_t) -1) {
+        SA_LOG(MIN_VERBOSITY, "Error lseeking the test file.\n");
+        goto error;
+    }
+    bytes_read = SM_SYS(read, test_file_fd, buff, 1);
+    if (bytes_read != 1) {
+        SA_LOG(MIN_VERBOSITY, "Error reading the test file. Expected to be read: %d," \
+                " Actually read: %d\n", bytes_to_be_written, bytes_read);
+        goto error;
+    }
+    SA_LOG(MIN_VERBOSITY, "Test file read content: %s\n", buff);
+    if (byte_read_from_memory != buff[0]) {
+        SA_LOG(MIN_VERBOSITY, "Error reading the test file. Byte read from memory is " \
+                "different than from file\n");
+        goto error;
+    }
+    mmapped_struct_page = (void*)(SM_CALL(get_struct_page, (unsigned long)test_file_mmapped_addr));
+    KERNEL_GDB("print *(struct page*)%p", mmapped_struct_page);
+    KERNEL_BREAKPOINT(3);
+    goto success;
+error:
+    ret = TEST_ERROR;
+    goto cleanup;
+success:
+    ret = TEST_SUCCESS;
+cleanup:
+    if (test_file_mmapped_addr != MAP_FAILED)
+        SM_SYS(munmap, test_file_mmapped_addr, page_size);
+    if (test_file_fd != -1)
+        close(test_file_fd);
+    SM_SYS(unlink, TEST_FILE_DIR_PATH TEST_FILE_NAME);
+    return ret;
 }
