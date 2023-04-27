@@ -193,11 +193,15 @@ static int dump_memory_structures_test(void) {
 }
 
 static int file_backed_memory_allocation_ext4_test(void) {
-    file_backed_memory_allocation_test(EXT4, "/home/test/tmp");
+    const char* user_home = getenv("HOME");
+    if (user_home == NULL) {
+        return TEST_ERROR;
+    }
+    return file_backed_memory_allocation_test(EXT4, user_home);
 }
 
 static int file_backed_memory_allocation_tmpfs_test(void) {
-    file_backed_memory_allocation_test(TMPFS, "/tmp");
+    return file_backed_memory_allocation_test(TMPFS, P_tmpdir);
 }
 
 static int file_backed_memory_allocation_test(fs_type_t fs_type,
@@ -220,10 +224,11 @@ static int file_backed_memory_allocation_test(fs_type_t fs_type,
     strcat(file_path, TEST_FILE_NAME);
 
     // Create file, write some content, read to check and reset cursor.
+    SA_LOG(MIN_VERBOSITY, "Opening file: %s\n", file_path);
     int test_file_fd = SM_SYS(open, file_path,
             O_CREAT | O_TRUNC | O_RDWR | O_SYNC, 0);
     SA_LOG(MIN_VERBOSITY, "test_file_fd: %d\n", test_file_fd);
-    if (test_file_fd == -1) {
+    if (test_file_fd < 0) {
         SA_LOG(MIN_VERBOSITY, "Error creating the test file\n");
         goto error;
     }
