@@ -34,7 +34,12 @@
 static int merge_vma_area_structs_test(void);
 static int dump_memory_structures_test(void);
 static int fork_copy_on_write_test(void);
-static int file_backed_memory_allocation_test(void);
+
+typedef enum fs_type {TMPFS, EXT4} fs_type_t;
+static int file_backed_memory_allocation_tmpfs_test(void);
+static int file_backed_memory_allocation_ext4_test(void);
+static int file_backed_memory_allocation_test(fs_type_t fs_type,
+        const char* fs_dir);
 
 static long page_size;
 
@@ -52,13 +57,15 @@ int main(void) {
     //   Tests   //
     ///////////////
 
-    EXECUTE_TEST(merge_vma_area_structs_test);
+    //EXECUTE_TEST(merge_vma_area_structs_test);
 
-    EXECUTE_TEST(dump_memory_structures_test);
+    //EXECUTE_TEST(dump_memory_structures_test);
 
-    EXECUTE_TEST(fork_copy_on_write_test);
+    //EXECUTE_TEST(fork_copy_on_write_test);
 
-    EXECUTE_TEST(file_backed_memory_allocation_test);
+    //EXECUTE_TEST(file_backed_memory_allocation_tmpfs_test);
+
+    EXECUTE_TEST(file_backed_memory_allocation_ext4_test);
 
     goto success;
 error:
@@ -185,9 +192,16 @@ static int dump_memory_structures_test(void) {
     return TEST_SUCCESS;
 }
 
-static int file_backed_memory_allocation_test(void) {
-    #define TEST_FILE_DIR_PATH "/tmp/"
-    //#define TEST_FILE_DIR_PATH "/home/test/tmp/"
+static int file_backed_memory_allocation_ext4_test(void) {
+    file_backed_memory_allocation_test(EXT4, "/home/test/tmp");
+}
+
+static int file_backed_memory_allocation_tmpfs_test(void) {
+    file_backed_memory_allocation_test(TMPFS, "/tmp");
+}
+
+static int file_backed_memory_allocation_test(fs_type_t fs_type,
+        const char* fs_dir) {
     #define TEST_FILE_NAME "mapped_reading_test_file"
     #define TEST_FILE_CONTENT "abc"
     int ret = TEST_ERROR;
@@ -196,9 +210,17 @@ static int file_backed_memory_allocation_test(void) {
     void* mmapped_struct_page = NULL;
     int bytes_read;
     char byte_read_from_memory;
+    char* file_path = (char*)malloc(strlen(fs_dir) + 1 + sizeof(TEST_FILE_NAME));
+    if (file_path == NULL) {
+        goto error;
+    }
+    *file_path = '\0';
+    strcat(file_path, fs_dir);
+    strcat(file_path, "/");
+    strcat(file_path, TEST_FILE_NAME);
 
     // Create file, write some content, read to check and reset cursor.
-    int test_file_fd = SM_SYS(open, TEST_FILE_DIR_PATH TEST_FILE_NAME,
+    int test_file_fd = SM_SYS(open, file_path,
             O_CREAT | O_TRUNC | O_RDWR | O_SYNC, 0);
     SA_LOG(MIN_VERBOSITY, "test_file_fd: %d\n", test_file_fd);
     if (test_file_fd == -1) {
@@ -214,10 +236,24 @@ static int file_backed_memory_allocation_test(void) {
         SA_LOG(MIN_VERBOSITY, "Error lseeking the test file.\n");
         goto error;
     }
+    KERNEL_BREAKPOINT_SET("new_sync_read");
+    if (fs_type == TMPFS) {
+        KERNEL_BREAKPOINT_SET("shmem_file_read_iter");
+        KERNEL_BREAKPOINT_SET("shmem_getpage_gfp");
+    } else if (fs_type == EXT4) {
+        KERNEL_BREAKPOINT_SET("ext4_file_read_iter");
+    }
     KERNEL_BREAKPOINT_SET("__alloc_pages_nodemask");
     // See if the read generates a struct page allocation
     bytes_read = SM_SYS(read, test_file_fd, buff, 1);
     KERNEL_BREAKPOINT_UNSET("__alloc_pages_nodemask");
+    if (fs_type == TMPFS) {
+        KERNEL_BREAKPOINT_UNSET("shmem_getpage_gfp");
+        KERNEL_BREAKPOINT_UNSET("shmem_file_read_iter");
+    } else if (fs_type == EXT4) {
+        KERNEL_BREAKPOINT_UNSET("ext4_file_read_iter");
+    }
+    KERNEL_BREAKPOINT_UNSET("new_sync_read");
     if (bytes_read != 1) {
         SA_LOG(MIN_VERBOSITY, "Bytes read different than expected.\n");
         goto error;
@@ -230,9 +266,13 @@ static int file_backed_memory_allocation_test(void) {
     memset(buff, 0, sizeof(buff));
     strcpy(buff, TEST_FILE_CONTENT);
     int bytes_to_be_written = strlen(buff);
-    KERNEL_BREAKPOINT_SET("__alloc_pages_nodemask");
+    if (fs_type != EXT4) {
+        KERNEL_BREAKPOINT_SET("__alloc_pages_nodemask");
+    }
     int bytes_written = SM_SYS(write, test_file_fd, buff, bytes_to_be_written);
-    KERNEL_BREAKPOINT_UNSET("__alloc_pages_nodemask");
+    if (fs_type != EXT4) {
+        KERNEL_BREAKPOINT_UNSET("__alloc_pages_nodemask");
+    }
     if (bytes_written != bytes_to_be_written) {
         SA_LOG(MIN_VERBOSITY, "Error writing test file. Expected to be written: %d," \
                 " Actually written: %d\n", bytes_to_be_written, bytes_written);
@@ -269,7 +309,21 @@ static int file_backed_memory_allocation_test(void) {
     }
 
     // Read from memory and from file
+    if (fs_type == TMPFS) {
+        KERNEL_BREAKPOINT_SET("shmem_fault");
+    } else if (fs_type == EXT4) {
+        KERNEL_BREAKPOINT_SET("ext4_filemap_fault");
+    }
+    KERNEL_BREAKPOINT_SET("filemap_map_pages");
+    KERNEL_GDB("stopi on");
     byte_read_from_memory = *((const char*)test_file_mmapped_addr);
+    KERNEL_GDB("stopi off");
+    KERNEL_BREAKPOINT_UNSET("filemap_map_pages");
+    if (fs_type == TMPFS) {
+        KERNEL_BREAKPOINT_UNSET("shmem_fault");
+    } else if (fs_type == EXT4) {
+        KERNEL_BREAKPOINT_UNSET("ext4_filemap_fault");
+    }
     SA_LOG(MIN_VERBOSITY, "Char read from memory: %c\n", byte_read_from_memory);
     memset(buff, 0, sizeof(buff));
     if (SM_SYS(lseek, test_file_fd, 0, SEEK_SET) == (off_t) -1) {
@@ -298,10 +352,15 @@ error:
 success:
     ret = TEST_SUCCESS;
 cleanup:
-    if (test_file_mmapped_addr != MAP_FAILED)
+    if (test_file_mmapped_addr != MAP_FAILED) {
         SM_SYS(munmap, test_file_mmapped_addr, page_size);
-    if (test_file_fd != -1)
+    }
+    if (test_file_fd != -1) {
         close(test_file_fd);
-    SM_SYS(unlink, TEST_FILE_DIR_PATH TEST_FILE_NAME);
+    }
+    SM_SYS(unlink, file_path);
+    if (file_path != NULL) {
+        free(file_path);
+    }
     return ret;
 }
