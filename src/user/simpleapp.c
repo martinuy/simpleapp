@@ -31,6 +31,8 @@
   if (test() == TEST_ERROR) \
       goto error;
 
+static int initialize_globals(void);
+
 static int merge_vma_area_structs_test(void);
 static int dump_memory_structures_test(void);
 static int fork_copy_on_write_test(void);
@@ -40,18 +42,18 @@ static int file_backed_memory_allocation_tmpfs_test(void);
 static int file_backed_memory_allocation_ext4_test(void);
 static int file_backed_memory_allocation_test(fs_type_t fs_type,
         const char* fs_dir);
+static int pte_entry_states_transition_test(void);
 
 static long page_size;
+static const char* user_home_dir;
 
 int main(void) {
     int ret;
     SA_LOG(MIN_VERBOSITY, "main - begin\n");
 
-    ////////////////////
-    // Initialization //
-    ////////////////////
-
-    page_size = sysconf(_SC_PAGE_SIZE);
+    if (initialize_globals() == TEST_ERROR) {
+        goto error;
+    }
 
     ///////////////
     //   Tests   //
@@ -65,7 +67,9 @@ int main(void) {
 
     //EXECUTE_TEST(file_backed_memory_allocation_tmpfs_test);
 
-    EXECUTE_TEST(file_backed_memory_allocation_ext4_test);
+    //EXECUTE_TEST(file_backed_memory_allocation_ext4_test);
+
+    EXECUTE_TEST(pte_entry_states_transition_test);
 
     goto success;
 error:
@@ -75,6 +79,23 @@ error:
 success:
     ret = TEST_SUCCESS;
     SA_LOG(MIN_VERBOSITY, "main - end success\n");
+cleanup:
+    return ret;
+}
+
+static int initialize_globals(void) {
+    int ret = TEST_ERROR;
+    page_size = sysconf(_SC_PAGE_SIZE);
+    user_home_dir = getenv("HOME");
+    if (user_home_dir == NULL) {
+        goto error;
+    }
+    goto success;
+error:
+    ret = TEST_ERROR;
+    goto cleanup;
+success:
+    ret = TEST_SUCCESS;
 cleanup:
     return ret;
 }
@@ -193,27 +214,19 @@ static int dump_memory_structures_test(void) {
 }
 
 static int file_backed_memory_allocation_ext4_test(void) {
-    const char* user_home = getenv("HOME");
-    if (user_home == NULL) {
-        return TEST_ERROR;
-    }
-    return file_backed_memory_allocation_test(EXT4, user_home);
+    return file_backed_memory_allocation_test(EXT4, user_home_dir);
 }
 
 static int file_backed_memory_allocation_tmpfs_test(void) {
     return file_backed_memory_allocation_test(TMPFS, P_tmpdir);
 }
 
-static int file_backed_memory_allocation_test(fs_type_t fs_type,
-        const char* fs_dir) {
-    #define TEST_FILE_NAME "mapped_reading_test_file"
-    #define TEST_FILE_CONTENT "abc"
+static int create_blank_file_helper(fs_type_t fs_type,
+        const char* fs_dir, int* fd_ptr, int flags) {
+    #define TEST_FILE_NAME "test_file"
     int ret = TEST_ERROR;
-    char buff[4096];
-    void* test_file_mmapped_addr = MAP_FAILED;
-    void* mmapped_struct_page = NULL;
-    int bytes_read;
-    char byte_read_from_memory;
+    int test_file_fd = -1;
+    long sys_ret;
     char* file_path = (char*)malloc(strlen(fs_dir) + 1 + sizeof(TEST_FILE_NAME));
     if (file_path == NULL) {
         goto error;
@@ -222,42 +235,83 @@ static int file_backed_memory_allocation_test(fs_type_t fs_type,
     strcat(file_path, fs_dir);
     strcat(file_path, "/");
     strcat(file_path, TEST_FILE_NAME);
-
-    // Create file, write some content, read to check and reset cursor.
     SA_LOG(MIN_VERBOSITY, "Opening file: %s\n", file_path);
-    int test_file_fd = SM_SYS(open, file_path,
-            O_CREAT | O_TRUNC | O_RDWR | O_SYNC, 0);
+    test_file_fd = SM_SYS(open, file_path,
+            O_CREAT | O_TRUNC | O_RDWR | flags, 0);
     SA_LOG(MIN_VERBOSITY, "test_file_fd: %d\n", test_file_fd);
     if (test_file_fd < 0) {
         SA_LOG(MIN_VERBOSITY, "Error creating the test file\n");
         goto error;
     }
-    if (SM_SYS(ftruncate, test_file_fd, page_size) == -1) {
+    sys_ret = SM_SYS(ftruncate, test_file_fd, page_size);
+    if (sys_ret == -1) {
         SA_LOG(MIN_VERBOSITY, "Error truncating the test file to %d\n", page_size);
         goto error;
     }
-    memset(buff, 0, sizeof(buff));
     if (SM_SYS(lseek, test_file_fd, 0, SEEK_SET) == (off_t) -1) {
         SA_LOG(MIN_VERBOSITY, "Error lseeking the test file.\n");
         goto error;
     }
+    *fd_ptr = dup(test_file_fd);
+    goto success;
+error:
+    ret = TEST_ERROR;
+    goto cleanup;
+success:
+    ret = TEST_SUCCESS;
+cleanup:
+    if (test_file_fd >= 0) {
+        close(test_file_fd);
+    }
+    if (file_path != NULL) {
+        SM_SYS(unlink, file_path);
+        free(file_path);
+    }
+    return ret;
+}
+
+static int file_backed_memory_allocation_test(fs_type_t fs_type,
+        const char* fs_dir) {
+    #define TEST_FILE_CONTENT "abc"
+    int ret = TEST_ERROR;
+    char buff[4096];
+    void* test_file_mmapped_addr = MAP_FAILED;
+    void* mmapped_struct_page = NULL;
+    int bytes_read;
+    char byte_read_from_memory;
+    int test_file_fd = -1;
+    if (create_blank_file_helper(fs_type, fs_dir, &test_file_fd, O_SYNC)
+            == TEST_ERROR) {
+        goto error;
+    }
+    memset(buff, 0, sizeof(buff));
     KERNEL_BREAKPOINT_SET("new_sync_read");
+    KERNEL_BREAKPOINT_SET("copy_page_to_iter");
     if (fs_type == TMPFS) {
         KERNEL_BREAKPOINT_SET("shmem_file_read_iter");
         KERNEL_BREAKPOINT_SET("shmem_getpage_gfp");
     } else if (fs_type == EXT4) {
         KERNEL_BREAKPOINT_SET("ext4_file_read_iter");
+        KERNEL_BREAKPOINT_SET("generic_file_buffered_read");
+        KERNEL_BREAKPOINT_SET("ext4_mpage_readpages");
+        KERNEL_BREAKPOINT_SET("ext4_map_blocks");
+        KERNEL_BREAKPOINT_SET("ext4_find_extent");
+        KERNEL_BREAKPOINT_SET("ext4_ext_put_gap_in_cache");
     }
-    KERNEL_BREAKPOINT_SET("__alloc_pages_nodemask");
     // See if the read generates a struct page allocation
     bytes_read = SM_SYS(read, test_file_fd, buff, 1);
-    KERNEL_BREAKPOINT_UNSET("__alloc_pages_nodemask");
     if (fs_type == TMPFS) {
         KERNEL_BREAKPOINT_UNSET("shmem_getpage_gfp");
         KERNEL_BREAKPOINT_UNSET("shmem_file_read_iter");
     } else if (fs_type == EXT4) {
+        KERNEL_BREAKPOINT_UNSET("ext4_ext_put_gap_in_cache");
+        KERNEL_BREAKPOINT_UNSET("ext4_find_extent");
+        KERNEL_BREAKPOINT_UNSET("ext4_map_blocks");
+        KERNEL_BREAKPOINT_UNSET("ext4_mpage_readpages");
+        KERNEL_BREAKPOINT_UNSET("generic_file_buffered_read");
         KERNEL_BREAKPOINT_UNSET("ext4_file_read_iter");
     }
+    KERNEL_BREAKPOINT_UNSET("copy_page_to_iter");
     KERNEL_BREAKPOINT_UNSET("new_sync_read");
     if (bytes_read != 1) {
         SA_LOG(MIN_VERBOSITY, "Bytes read different than expected.\n");
@@ -320,9 +374,11 @@ static int file_backed_memory_allocation_test(fs_type_t fs_type,
         KERNEL_BREAKPOINT_SET("ext4_filemap_fault");
     }
     KERNEL_BREAKPOINT_SET("filemap_map_pages");
+    KERNEL_BREAKPOINT_SET("alloc_set_pte");
     KERNEL_GDB("stopi on");
     byte_read_from_memory = *((const char*)test_file_mmapped_addr);
     KERNEL_GDB("stopi off");
+    KERNEL_BREAKPOINT_UNSET("alloc_set_pte");
     KERNEL_BREAKPOINT_UNSET("filemap_map_pages");
     if (fs_type == TMPFS) {
         KERNEL_BREAKPOINT_UNSET("shmem_fault");
@@ -349,6 +405,11 @@ static int file_backed_memory_allocation_test(fs_type_t fs_type,
     }
     mmapped_struct_page = (void*)(SM_CALL(get_struct_page, (unsigned long)test_file_mmapped_addr));
     KERNEL_GDB("print *(struct page*)%p", mmapped_struct_page);
+    if (fs_type == EXT4) {
+        KERNEL_GDB("print *(struct buffer_head*)(((struct page*)%p)->private)", mmapped_struct_page);
+        system("lsblk -a");
+        KERNEL_GDB("x/s ((struct buffer_head*)(((struct page*)%p)->private))->b_bdev->bd_bdi->dev_name", mmapped_struct_page);
+    }
     KERNEL_BREAKPOINT(3);
     goto success;
 error:
@@ -360,12 +421,67 @@ cleanup:
     if (test_file_mmapped_addr != MAP_FAILED) {
         SM_SYS(munmap, test_file_mmapped_addr, page_size);
     }
-    if (test_file_fd != -1) {
+    if (test_file_fd >= 0) {
         close(test_file_fd);
     }
-    SM_SYS(unlink, file_path);
-    if (file_path != NULL) {
-        free(file_path);
+    return ret;
+}
+
+static int pte_entry_states_transition_test(void) {
+    int ret = TEST_ERROR;
+    long sys_ret;
+    int test_file_fd = -1;
+    void* test_file_mmapped_addr = MAP_FAILED;
+    if (create_blank_file_helper(EXT4, user_home_dir, &test_file_fd, 0) == TEST_ERROR) {
+        goto error;
+    }
+    test_file_mmapped_addr = (void*)SM_SYS(mmap, NULL, page_size, PROT_READ | PROT_WRITE, MAP_SHARED, test_file_fd, 0);
+    if (test_file_mmapped_addr == MAP_FAILED) {
+        SA_LOG(MIN_VERBOSITY, "Test file mapping failed\n");
+        goto error;
+    } else {
+        SA_LOG(MIN_VERBOSITY, "test_file_mmapped_addr: %p\n", test_file_mmapped_addr);
+    }
+    // At this point, the pte entry is 0x0 (no mapping).
+
+    // How to check the pte entry value in a native_set_pte_at breakpoint?
+    // The pte entry is in $rcx. Thus, (gdb) print (($rcx & (1 << BIT_TO_CHECK)) != 0)
+    // See BIT_TO_CHECK values in pgtable_types.h.
+
+    KERNEL_BREAKPOINT_SET("native_set_pte_at");
+    KERNEL_GDB("stopi on");
+    *(char*)test_file_mmapped_addr = 'a';
+    KERNEL_GDB("stopi off");
+    KERNEL_BREAKPOINT_UNSET("native_set_pte_at");
+    // At this point, a page fault occurred and the pte entry points to the page cache's page.
+    // The pte entry has the _PAGE_BIT_DIRTY (bit 6) and _PAGE_BIT_RW (bit 1) bits set.
+
+    KERNEL_BREAKPOINT_SET("native_set_pte_at");
+    sys_ret = SM_SYS(fsync, test_file_fd);
+    KERNEL_BREAKPOINT_UNSET("native_set_pte_at");
+    if (sys_ret != 0) {
+        goto error;
+    }
+    // The pte entry is similar to the previous value but has the _PAGE_BIT_DIRTY (bit 6) and _PAGE_BIT_RW bits (bit 1) unset.
+
+    // Dirty the page one more time!
+    KERNEL_BREAKPOINT_SET("native_set_pte");
+    KERNEL_GDB("stopi on");
+    *(char*)test_file_mmapped_addr = 'b';
+    KERNEL_GDB("stopi off");
+    KERNEL_BREAKPOINT_UNSET("native_set_pte");
+    goto success;
+error:
+    ret = TEST_ERROR;
+    goto cleanup;
+success:
+    ret = TEST_SUCCESS;
+cleanup:
+    if (test_file_mmapped_addr != MAP_FAILED) {
+        SM_SYS(munmap, test_file_mmapped_addr, page_size);
+    }
+    if (test_file_fd >= 0) {
+        close(test_file_fd);
     }
     return ret;
 }
