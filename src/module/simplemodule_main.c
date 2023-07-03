@@ -194,59 +194,77 @@ unsigned long show_memory_structures(void) {
     return 0x0UL;
 }
 
-unsigned long get_struct_page(unsigned long vaddr) {
-    struct page* page;
+unsigned long get_page_tables_entry(unsigned long vaddr,
+        unsigned long print_debug, unsigned long output) {
+    unsigned long output_kernel[5];
     pgd_t* pgd;
     pud_t* pud;
     pmd_t* pmd;
     pte_t* pte;
-
-    SM_PRINTF("------------------------------------------------------------------------------\n");
-    SM_PRINTF("--- Mapping of a virtual address to a struct page* through the Page Tables ---\n");
-    SM_PRINTF("------------------------------------------------------------------------------\n");
-    SM_PRINTF("Virtual address: 0x%lx\n", vaddr);
+    unsigned long* max_level = &output_kernel[4];
+    *max_level = (unsigned long)-1;
 
     if (pgtable_l5_enabled()) {
         SM_PRINTF("Cannot handle 5 levels at the moment.\n");
-        return 0UL;
+        goto error;
     }
 
     pgd = pgd_offset(current->mm, vaddr);
-    SM_PRINTF("PGD start (current->mm->pgd): 0x%px\n", current->mm->pgd);
-    SM_PRINTF("PGD offset: 0x%lx\n", ((char*)pgd - (char*)current->mm->pgd));
-    SM_PRINTF("PGD (entry's addr): 0x%px\n", pgd);
-    SM_PRINTF("*PGD (entry's value): 0x%lx\n", pgd_val(*pgd));
-    SM_PRINTF("*PGD (entry's next table value): 0x%lx\n", pgd_page_vaddr(*pgd));
-
+    output_kernel[0] = *(unsigned long*)pgd;
     pud = pud_offset((p4d_t*)pgd, vaddr);
-    SM_PRINTF("PUD start: 0x%lx\n", pgd_page_vaddr(*pgd));
-    SM_PRINTF("PUD offset: 0x%px\n", ((char*)pud - pgd_page_vaddr(*pgd)));
-    SM_PRINTF("PUD (entry's addr): 0x%px\n", pud);
-    SM_PRINTF("*PUD (entry's value): 0x%lx\n", pud_val(*pud));
-    SM_PRINTF("*PUD (entry's next table value): 0x%lx\n", pud_page_vaddr(*pud));
+    output_kernel[1] = *(unsigned long*)pud;
+    pmd = NULL;
+    pte = NULL;
 
     if (pud_trans_huge(*pud)) {
-        SM_PRINTF("PUD page IS transparent huge\n");
-        page = pud_page(*pud);
+        *max_level = 1UL;
     } else {
-        SM_PRINTF("PUD page IS NOT transparent huge\n");
         pmd = pmd_offset(pud, vaddr);
-        SM_PRINTF("PMD start: 0x%lx\n", pud_page_vaddr(*pud));
-        SM_PRINTF("PMD offset: 0x%px\n", ((char*)pmd - pud_page_vaddr(*pud)));
-        SM_PRINTF("PMD (entry's addr): 0x%px\n", pmd);
-        SM_PRINTF("*PMD (entry's value): 0x%lx\n", pmd_val(*pmd));
-        SM_PRINTF("*PMD (entry's next table value): 0x%lx\n", pmd_page_vaddr(*pmd));
-        if (pmd_large(*pmd)) {
-            SM_PRINTF("pmd_large: true\n");
-        } else {
-            SM_PRINTF("pmd_large: false\n");
-        }
+        output_kernel[2] = *(unsigned long*)pmd;
         if (pmd_trans_huge(*pmd)) {
-            SM_PRINTF("PMD page IS transparent huge\n");
-            page = pmd_page(*pmd);
+            *max_level = 2UL;
         } else {
-            SM_PRINTF("PMD page IS NOT transparent huge\n");
             pte = pte_offset_map(pmd, vaddr);
+            output_kernel[3] = *(unsigned long*)pte;
+            *max_level = 3UL;
+        }
+    }
+
+    if (print_debug) {
+        SM_PRINTF("Virtual address: 0x%lx\n", vaddr);
+        SM_PRINTF("PGD start (current->mm->pgd): 0x%px\n", current->mm->pgd);
+        SM_PRINTF("PGD offset: 0x%lx\n", ((char*)pgd - (char*)current->mm->pgd));
+        SM_PRINTF("PGD (entry's addr): 0x%px\n", pgd);
+        SM_PRINTF("*PGD (entry's value): 0x%lx\n", pgd_val(*pgd));
+        SM_PRINTF("*PGD (entry's next table value): 0x%lx\n", pgd_page_vaddr(*pgd));
+        SM_PRINTF("PUD start: 0x%lx\n", pgd_page_vaddr(*pgd));
+        SM_PRINTF("PUD offset: 0x%px\n", ((char*)pud - pgd_page_vaddr(*pgd)));
+        SM_PRINTF("PUD (entry's addr): 0x%px\n", pud);
+        SM_PRINTF("*PUD (entry's value): 0x%lx\n", pud_val(*pud));
+        SM_PRINTF("*PUD (entry's next table value): 0x%lx\n", pud_page_vaddr(*pud));
+        if (pud_trans_huge(*pud)) {
+            SM_PRINTF("PUD page IS transparent huge\n");
+        } else {
+            SM_PRINTF("PUD page IS NOT transparent huge\n");
+        }
+        if (*max_level > 1UL) {
+            SM_PRINTF("PMD start: 0x%lx\n", pud_page_vaddr(*pud));
+            SM_PRINTF("PMD offset: 0x%px\n", ((char*)pmd - pud_page_vaddr(*pud)));
+            SM_PRINTF("PMD (entry's addr): 0x%px\n", pmd);
+            SM_PRINTF("*PMD (entry's value): 0x%lx\n", pmd_val(*pmd));
+            SM_PRINTF("*PMD (entry's next table value): 0x%lx\n", pmd_page_vaddr(*pmd));
+            if (pmd_large(*pmd)) {
+                SM_PRINTF("pmd_large: true\n");
+            } else {
+                SM_PRINTF("pmd_large: false\n");
+            }
+            if (pmd_trans_huge(*pmd)) {
+                SM_PRINTF("PMD page IS transparent huge\n");
+            } else {
+                SM_PRINTF("PMD page IS NOT transparent huge\n");
+            }
+        }
+        if (*max_level > 2UL) {
             SM_PRINTF("PTE start: 0x%lx\n", pmd_page_vaddr(*pmd));
             SM_PRINTF("PTE offset: 0x%px\n", ((char*)pte - pmd_page_vaddr(*pmd)));
             SM_PRINTF("PTE (entry's addr): 0x%px\n", pte);
@@ -261,8 +279,47 @@ unsigned long get_struct_page(unsigned long vaddr) {
             } else {
                 SM_PRINTF("pte_global: false\n");
             }
-            page = pte_page(*pte);
         }
+    }
+
+    if (access_ok(output, sizeof(output_kernel))) {
+        if (copy_to_user((void*)output, output_kernel, sizeof(output_kernel)) != 0) {
+            goto error;
+        }
+    } else {
+        memcpy((void*)output, (void*)output_kernel, sizeof(output_kernel));
+    }
+    return SAMODULE_SUCCESS;
+error:
+    return SAMODULE_ERROR;
+}
+
+unsigned long get_struct_page(unsigned long vaddr) {
+    struct page* page;
+    unsigned long output_kernel[5];
+    pud_t* pud = (pud_t*)&output_kernel[1];
+    pmd_t* pmd = (pmd_t*)&output_kernel[2];
+    pte_t* pte = (pte_t*)&output_kernel[3];
+    unsigned long* max_level = &output_kernel[4];
+    *max_level = (unsigned long)-1;
+
+    SM_PRINTF("------------------------------------------------------------------------------\n");
+    SM_PRINTF("--- Mapping of a virtual address to a struct page* through the Page Tables ---\n");
+    SM_PRINTF("------------------------------------------------------------------------------\n");
+
+    if (get_page_tables_entry(vaddr, 1UL, (unsigned long)output_kernel) == SAMODULE_ERROR) {
+        goto error;
+    }
+
+    if (*max_level == 1UL) {
+        page = pud_page(*pud);
+    } else if (*max_level == 2UL) {
+        page = pmd_page(*pmd);
+    } else if (*max_level == 3UL) {
+        page = pte_page(*pte);
+    } else {
+        // Should not happen.
+        goto error;
     }
 
     SM_PRINTF("Page's virtual address (direct mapping): 0x%px\n", page_to_virt(page));
@@ -279,6 +336,8 @@ unsigned long get_struct_page(unsigned long vaddr) {
         SM_PRINTF("Page IS NOT transparent huge\n");
     }
     return (unsigned long)page;
+error:
+    return SAMODULE_ERROR;
 }
 
 static void print_mem_zone(struct zone* zone) {

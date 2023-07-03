@@ -17,7 +17,9 @@
 #define _GNU_SOURCE
 
 #include <fcntl.h>
+#include <semaphore.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -430,14 +432,22 @@ cleanup:
 static int pte_entry_states_transition_test(void) {
     int ret = TEST_ERROR;
     long sys_ret;
+    int child = -1;
     int test_file_fd = -1;
+    void* shared_page = MAP_FAILED;
+    sem_t* shared_sem = NULL;
+    int sem_ret;
+    int* shared_parent_wrote = NULL;
+    int status_code = 0;
     void* test_file_mmapped_addr = MAP_FAILED;
+    unsigned long page_table_entries[5];
     if (create_blank_file_helper(EXT4, user_home_dir, &test_file_fd, 0) == TEST_ERROR) {
         goto error;
     }
     test_file_mmapped_addr = (void*)SM_SYS(mmap, NULL, page_size, PROT_READ | PROT_WRITE, MAP_SHARED, test_file_fd, 0);
-    if (test_file_mmapped_addr == MAP_FAILED) {
+    if ((long)test_file_mmapped_addr < 0L) {
         SA_LOG(MIN_VERBOSITY, "Test file mapping failed\n");
+        test_file_mmapped_addr = MAP_FAILED;
         goto error;
     } else {
         SA_LOG(MIN_VERBOSITY, "test_file_mmapped_addr: %p\n", test_file_mmapped_addr);
@@ -448,11 +458,25 @@ static int pte_entry_states_transition_test(void) {
     // The pte entry is in $rcx. Thus, (gdb) print (($rcx & (1 << BIT_TO_CHECK)) != 0)
     // See BIT_TO_CHECK values in pgtable_types.h.
 
+    if (SM_CALL(get_page_tables_entry, (unsigned long)test_file_mmapped_addr,
+            0UL, (unsigned long)page_table_entries) == SAMODULE_ERROR) {
+        goto error;
+    }
+    SA_LOG(MIN_VERBOSITY, "Parent pre-write page tables entry: 0x%016lx\n",
+            page_table_entries[page_table_entries[4]]);
+    SA_LOG(MIN_VERBOSITY, "Parent writing test_file_mmapped_addr[0]\n");
     KERNEL_BREAKPOINT_SET("native_set_pte_at");
     KERNEL_GDB("stopi on");
     *(char*)test_file_mmapped_addr = 'a';
     KERNEL_GDB("stopi off");
     KERNEL_BREAKPOINT_UNSET("native_set_pte_at");
+    SA_LOG(MIN_VERBOSITY, "Parent wrote test_file_mmapped_addr[0] = %c\n", *(char*)test_file_mmapped_addr);
+    if (SM_CALL(get_page_tables_entry, (unsigned long)test_file_mmapped_addr,
+            0UL, (unsigned long)page_table_entries) == SAMODULE_ERROR) {
+        goto error;
+    }
+    SA_LOG(MIN_VERBOSITY, "Parent post-write page tables entry: 0x%016lx\n",
+            page_table_entries[page_table_entries[4]]);
     // At this point, a page fault occurred and the pte entry points to the page cache's page.
     // The pte entry has the _PAGE_BIT_DIRTY (bit 6) and _PAGE_BIT_RW (bit 1) bits set.
 
@@ -462,14 +486,106 @@ static int pte_entry_states_transition_test(void) {
     if (sys_ret != 0) {
         goto error;
     }
+    if (SM_CALL(get_page_tables_entry, (unsigned long)test_file_mmapped_addr,
+            0UL, (unsigned long)page_table_entries) == SAMODULE_ERROR) {
+        goto error;
+    }
+    SA_LOG(MIN_VERBOSITY, "Parent post-fsync page tables entry: 0x%016lx\n",
+            page_table_entries[page_table_entries[4]]);
     // The pte entry is similar to the previous value but has the _PAGE_BIT_DIRTY (bit 6) and _PAGE_BIT_RW bits (bit 1) unset.
 
-    // Dirty the page one more time!
-    KERNEL_BREAKPOINT_SET("native_set_pte");
-    KERNEL_GDB("stopi on");
-    *(char*)test_file_mmapped_addr = 'b';
-    KERNEL_GDB("stopi off");
-    KERNEL_BREAKPOINT_UNSET("native_set_pte");
+    shared_page = (void*)SM_SYS(mmap, NULL, page_size, PROT_READ |
+            PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);
+    if ((long)shared_page < 0L) {
+        shared_page = MAP_FAILED;
+        goto error;
+    }
+    shared_sem = (sem_t*)shared_page;
+    if (sem_init(shared_sem, 1, 0) != 0) {
+        SA_LOG(MIN_VERBOSITY, "Sem initialization failed\n");
+        shared_sem = NULL;
+        goto error;
+    }
+    shared_parent_wrote = (int*)(((char*)shared_page) + sizeof(sem_t));
+    *shared_parent_wrote = 0;
+    SA_LOG(MIN_VERBOSITY, "Forking process...\n");
+    child = fork();
+    if (child == 0) {
+        if (SM_CALL(get_page_tables_entry, (unsigned long)test_file_mmapped_addr,
+                0UL, (unsigned long)page_table_entries) == SAMODULE_ERROR) {
+            goto error;
+        }
+        SA_LOG(MIN_VERBOSITY, "Child pre-read page tables entry: 0x%016lx\n",
+                page_table_entries[page_table_entries[4]]);
+        SA_LOG(MIN_VERBOSITY, "Child read test_file_mmapped_addr[0] = %c\n", *(char*)test_file_mmapped_addr);
+        if (SM_CALL(get_page_tables_entry, (unsigned long)test_file_mmapped_addr,
+                0UL, (unsigned long)page_table_entries) == SAMODULE_ERROR) {
+            goto error;
+        }
+        SA_LOG(MIN_VERBOSITY, "Child post-read page tables entry: 0x%016lx\n",
+                page_table_entries[page_table_entries[4]]);
+
+        if (sem_post(shared_sem) != 0) {
+            SA_LOG(MIN_VERBOSITY, "sem_post failed\n");
+            goto error;
+        }
+
+        SA_LOG(MIN_VERBOSITY, "Child waiting for parent to write: started\n");
+        while (*shared_parent_wrote == 0) {
+            while ((sem_ret = sem_wait(shared_sem)) == -1 && errno == EINTR) {
+                SA_LOG(MIN_VERBOSITY, "sem_wait retry\n");
+                continue;
+            }
+            if (sem_ret != 0) {
+                SA_LOG(MIN_VERBOSITY, "sem_wait failed\n");
+                goto error;
+            }
+        }
+        SA_LOG(MIN_VERBOSITY, "Child waiting for parent to write: finished\n");
+
+        if (SM_CALL(get_page_tables_entry, (unsigned long)test_file_mmapped_addr,
+                0UL, (unsigned long)page_table_entries) == SAMODULE_ERROR) {
+            goto error;
+        }
+        SA_LOG(MIN_VERBOSITY, "Child post-parent-write page tables entry: 0x%016lx\n",
+                page_table_entries[page_table_entries[4]]);
+    } else if (child != -1) {
+        SA_LOG(MIN_VERBOSITY, "Parent waiting for child to read: started\n");
+        while ((sem_ret = sem_wait(shared_sem)) == -1 && errno == EINTR) {
+            SA_LOG(MIN_VERBOSITY, "sem_wait retry\n");
+            continue;
+        }
+        if (sem_ret != 0) {
+            SA_LOG(MIN_VERBOSITY, "sem_wait failed\n");
+            goto error;
+        }
+        SA_LOG(MIN_VERBOSITY, "Parent waiting for child to read: finished\n");
+
+        // Dirty the page one more time!
+        SA_LOG(MIN_VERBOSITY, "Parent writing test_file_mmapped_addr[0]\n");
+        KERNEL_BREAKPOINT_SET("native_set_pte");
+        KERNEL_GDB("stopi on");
+        *(char*)test_file_mmapped_addr = 'b';
+        KERNEL_GDB("stopi off");
+        KERNEL_BREAKPOINT_SET("native_set_pte");
+        SA_LOG(MIN_VERBOSITY, "Parent wrote test_file_mmapped_addr[0] = %c\n", *(char*)test_file_mmapped_addr);
+        if (SM_CALL(get_page_tables_entry, (unsigned long)test_file_mmapped_addr,
+                0UL, (unsigned long)page_table_entries) == SAMODULE_ERROR) {
+            goto error;
+        }
+        SA_LOG(MIN_VERBOSITY, "Parent post-write page tables entry: 0x%016lx\n",
+                page_table_entries[page_table_entries[4]]);
+        *shared_parent_wrote = 1;
+        if (sem_post(shared_sem) != 0) {
+            SA_LOG(MIN_VERBOSITY, "sem_post failed\n");
+            goto error;
+        }
+        SA_LOG(MIN_VERBOSITY, "Parent waiting for child to finish: started\n");
+        if (waitpid(child, &status_code, 0) == -1) {
+            SA_LOG(MIN_VERBOSITY, "Parent waiting for child to finish: failed\n");
+        }
+        SA_LOG(MIN_VERBOSITY, "Parent waiting for child to finish: finished\n");
+    }
     goto success;
 error:
     ret = TEST_ERROR;
@@ -482,6 +598,19 @@ cleanup:
     }
     if (test_file_fd >= 0) {
         close(test_file_fd);
+    }
+    if (child == 0) {
+        if (shared_page != MAP_FAILED) {
+            SM_SYS(munmap, shared_page, page_size);
+        }
+        exit(0);
+    } else if (child != -1) {
+        if (shared_sem != NULL) {
+            sem_destroy(shared_sem);
+        }
+        if (shared_page != MAP_FAILED) {
+            SM_SYS(munmap, shared_page, page_size);
+        }
     }
     return ret;
 }
