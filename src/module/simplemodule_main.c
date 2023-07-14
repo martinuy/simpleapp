@@ -23,16 +23,10 @@
 
 noinline void pre_syscall_trampoline_hook(unsigned long syscall_number,
         unsigned long syscall_args[]) {
-    if (syscall_number == __NR_mmap) {
-        //BREAKPOINT(1);
-    }
 }
 
 noinline void post_syscall_trampoline_hook(unsigned long syscall_number,
         unsigned long syscall_args[], unsigned long return_value) {
-    if (syscall_number == __NR_mmap) {
-        //BREAKPOINT(2);
-    }
 }
 
 unsigned long get_struct_page(unsigned long vaddr);
