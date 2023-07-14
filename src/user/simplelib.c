@@ -264,6 +264,94 @@ cleanup:
     return ret;
 }
 
+long sm_call_gdb(unsigned int gdb_call,
+        unsigned int declared_args_count, unsigned int args_count, ...) {
+    void* data_ptr;
+    unsigned int args_i;
+    size_t* arg_lengths;
+    size_t* arg_lengths_ptr;
+    const char* arg;
+    va_list args;
+    unsigned int empty_args_count;
+    sm_call_data_t sm_call_data = {0x0};
+    sm_call_data.call_number = SM_CALL_GDB;
+    sm_call_data.return_value = GDB_ERROR;
+    if (args_count > 2U || args_count > declared_args_count) {
+        SA_LOG(MIN_VERBOSITY, "Number of arguments %u not supported.", args_count);
+        goto error;
+    }
+    empty_args_count = declared_args_count - args_count;
+    size_t final_data_length = sizeof(unsigned int) * 2;
+    arg_lengths = (size_t*)malloc(args_count * sizeof(size_t));
+    if (!arg_lengths) {
+        goto error;
+    }
+    arg_lengths_ptr = arg_lengths;
+    va_start(args, args_count);
+    args_i = args_count;
+    while (args_i-- > 0) {
+        arg = va_arg(args, const char*);
+        *arg_lengths_ptr = strlen(arg);
+        if (final_data_length + *arg_lengths_ptr < final_data_length) {
+            goto error;
+        }
+        final_data_length += *arg_lengths_ptr;
+        arg_lengths_ptr += 1;
+        if (final_data_length + 1U < final_data_length) {
+            goto error;
+        }
+        final_data_length += 1U;
+    }
+    args_i = empty_args_count;
+    while (args_i-- > 0) {
+        if (final_data_length + 1U < final_data_length) {
+            goto error;
+        }
+        final_data_length += 1U;
+    }
+    sm_call_data.data_length = (unsigned long)final_data_length;
+    sm_call_data.data = (void*)malloc(final_data_length);
+    if (!sm_call_data.data) {
+        goto error;
+    }
+    data_ptr = sm_call_data.data;
+    *((unsigned int*)data_ptr) = gdb_call;
+    data_ptr = (char*)data_ptr + sizeof(unsigned int);
+    *((unsigned int*)data_ptr) = declared_args_count;
+    data_ptr = (char*)data_ptr + sizeof(unsigned int);
+    arg_lengths_ptr = arg_lengths;
+    va_start(args, args_count);
+    args_i = args_count;
+    while (args_i-- > 0) {
+        arg = va_arg(args, const char*);
+        strcpy((char*)data_ptr, arg);
+        data_ptr = (char*)data_ptr + *arg_lengths_ptr;
+        arg_lengths_ptr += 1;
+        *((char*)data_ptr) = '\0';
+        data_ptr = (char*)data_ptr + 1U;
+    }
+    args_i = empty_args_count;
+    while (args_i-- > 0) {
+        *((char*)data_ptr) = '\0';
+        data_ptr = (char*)data_ptr + 1U;
+    }
+    if (sm_call(&sm_call_data) == SLIB_ERROR) {
+        goto error;
+    }
+    print_module_output();
+    goto cleanup;
+error:
+    SA_LOG(MIN_VERBOSITY, "SM_CALL_GDB error\n");
+cleanup:
+    if (arg_lengths) {
+        free(arg_lengths);
+    }
+    if (sm_call_data.data) {
+        free(sm_call_data.data);
+    }
+    return sm_call_data.return_value;
+}
+
 unsigned long sm_call_function(const char* function_name, unsigned int args_count, ...) {
     void* data_ptr;
     unsigned int args_i;

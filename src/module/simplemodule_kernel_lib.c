@@ -26,11 +26,11 @@ DEFINE_MUTEX(outputs_lock);
 struct list_head outputs = LIST_HEAD_INIT(outputs);
 
 __attribute__((used, optimize("O0")))
-noinline void sm_debug(int num) {
+noinline void sm_debug(const char* msg) {
 }
 
 __attribute__((used, optimize("O0")))
-noinline void sm_breakpoint_set(const char* sym) {
+noinline void sm_breakpoint_set(const char* sym, const char* cmd) {
 }
 
 __attribute__((used, optimize("O0")))
