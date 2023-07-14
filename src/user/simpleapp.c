@@ -34,7 +34,7 @@ int main(void) {
     int ret;
     SA_LOG(MAX_VERBOSITY, "main - begin\n");
 
-    BREAKPOINT(1);
+    BREAKPOINT("1 (user)");
 
     kernel_asm_function();
 
@@ -87,15 +87,18 @@ void direct_syscall(void) {
     SA_LOG(MIN_VERBOSITY, "======== direct_syscall =======\n");
     int sys_open_fd;
     KERNEL_GDB("echo \"Setting a breakpoint in do_sys_open.\"");
+    KERNEL_BREAKPOINT_SET("do_sys_open", "echo \"filename: \"\nx/s $rsi");
+    KERNEL_BREAKPOINT_SET("path_openat");
+    KERNEL_BREAKPOINT("2 (kernel, from user)");
     KERNEL_GDB("stopi on");
-    KERNEL_BREAKPOINT_SET("do_sys_open");
-    KERNEL_BREAKPOINT(2);
     sys_open_fd = _sys_open("/proc/self/exe", O_RDONLY, 0);
+    KERNEL_GDB("stopi off");
     if (sys_open_fd < 0)
         goto cleanup;
     else
         SA_LOG(MIN_VERBOSITY, "Returned value (open FD): %d\n", sys_open_fd);
 cleanup:
+    KERNEL_BREAKPOINT_UNSET("path_openat");
     KERNEL_BREAKPOINT_UNSET("do_sys_open");
     if (sys_open_fd != -1)
         close(sys_open_fd);

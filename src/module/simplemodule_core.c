@@ -38,13 +38,13 @@
     , param_##X
 
 #define SM_CALL_SHOW_ARGS(X, ...) \
-    param_##X FOR_EACH(SM_CALL__SHOW_ARGS,__VA_ARGS__)
+    param_##X FOR_EACH(SM_CALL__SHOW_ARGS, __VA_ARGS__)
 
 #define SM_CALL__SHOW_ARGS_TYPES(X) \
     , unsigned long
 
 #define SM_CALL_SHOW_ARGS_TYPES(X, ...) \
-    unsigned long FOR_EACH(SM_CALL__SHOW_ARGS_TYPES,__VA_ARGS__)
+    unsigned long FOR_EACH(SM_CALL__SHOW_ARGS_TYPES, __VA_ARGS__)
 
 #define SM_CALL__INVOKE_FUNCTION_PTR(name, ...) \
 ({\
@@ -69,6 +69,31 @@
     unsigned int args = SM_COUNT_ARGS(__VA_ARGS__); \
     if (args_count == args) { \
         d.return_value = SM_CALL__INVOKE_FUNCTION_PTR(function_ptr, __VA_ARGS__); \
+    } \
+})
+
+#define SM_CALL_GDB_DECLARE_ARGS(X) \
+    const char* param_##X; \
+    size_t param_##X##len;
+
+#define SM_CALL_GDB_PREPARE_ARGS(X) \
+    param_##X = (const char*)data_ptr; \
+    param_##X##len = strlen((const char*)data_ptr); \
+    data_ptr = (char*)data_ptr + param_##X##len + 1U;
+
+#define SM_CALL_GDB__INVOKE_FUNCTION_PTR(name, ...) \
+({\
+    FOR_EACH(SM_CALL_GDB_DECLARE_ARGS, __VA_ARGS__) \
+    FOR_EACH(SM_CALL_GDB_PREPARE_ARGS,__VA_ARGS__) \
+    ((void (*)(SM_CALL_GDB_SHOW_CHAR_ARGS_TYPES(__VA_ARGS__)))name) \
+            (SM_CALL_SHOW_ARGS(__VA_ARGS__)); \
+})
+
+#define SM_CALL_GDB_INVOKE_FUNCTION_PTR(...) \
+({ \
+    if (args_count == SM_COUNT_ARGS(__VA_ARGS__)) { \
+        SM_CALL_GDB__INVOKE_FUNCTION_PTR(function_ptr, __VA_ARGS__); \
+        d.return_value = GDB_SUCCESS; \
     } \
 })
 
@@ -177,17 +202,27 @@ static long sm_call(unsigned long arg) {
         SM_CALL_INVOKE_FUNCTION_PTR(1, 2, 3, 4, 5);
         SM_CALL_INVOKE_FUNCTION_PTR(1, 2, 3, 4, 5, 6);
     } else if (d.call_number == SM_CALL_GDB) {
-        unsigned int gdb_mode = *((unsigned int*)d.data);
-        void* gdb_data = ((char*)d.data + sizeof(unsigned int));
-        d.return_value = GDB_SUCCESS;
+        void* function_ptr;
+        unsigned int args_count;
+        void* data_ptr = (void*)d.data;
+        unsigned int gdb_mode = *((unsigned int*)data_ptr);
+        data_ptr = (char*)data_ptr + sizeof(unsigned int);
+        args_count = *(unsigned int*)data_ptr;
+        data_ptr = (char*)data_ptr + sizeof(unsigned int);
         if (gdb_mode == GDB_MODE_BREAKPOINT) {
-            sm_debug(*((int*)gdb_data));
+            function_ptr = (void*)sm_debug;
         } else if (gdb_mode == GDB_MODE_BREAKPOINT_GDB) {
-            sm_gdb((const char*)gdb_data);
+            function_ptr = (void*)sm_gdb;
         } else if (gdb_mode == GDB_MODE_BREAKPOINT_SET) {
-            sm_breakpoint_set((const char*)gdb_data);
+            function_ptr = (void*)sm_breakpoint_set;
         } else if (gdb_mode == GDB_MODE_BREAKPOINT_UNSET) {
-            sm_breakpoint_unset((const char*)gdb_data);
+            function_ptr = (void*)sm_breakpoint_unset;
+        } else {
+            function_ptr = NULL;
+        }
+        if (function_ptr != NULL) {
+            SM_CALL_GDB_INVOKE_FUNCTION_PTR(1);
+            SM_CALL_GDB_INVOKE_FUNCTION_PTR(1, 2);
         } else {
             d.return_value = GDB_ERROR;
         }

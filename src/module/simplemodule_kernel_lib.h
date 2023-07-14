@@ -66,14 +66,33 @@
          SM_PRINTF(args); \
  } while(0)
 
-#define BREAKPOINT(NUM) \
+#define BREAKPOINT(MSG) \
+({ \
+  const char* msg = MSG; \
   __asm__ __volatile__( \
-          "mov $"#NUM", %%rdi\n" \
+          "mov %1, %%rdi\n" \
           "call %P0\n" \
-          : : "i"(sm_debug) : "rdi" \
-  );
+          : : "i"(sm_debug), "m"(msg) : "rdi" \
+  ); \
+})
 
-#define BREAKPOINT_SET(SYM) sm_breakpoint_set(SYM)
+#define SM_CALL_GDB__SHOW_CHAR_ARGS_TYPES(X) \
+    , const char*
+
+#define SM_CALL_GDB_SHOW_CHAR_ARGS_TYPES(X, ...) \
+    const char* FOR_EACH(SM_CALL_GDB__SHOW_CHAR_ARGS_TYPES, __VA_ARGS__)
+
+#define BREAKPOINT_SET(...) \
+({ \
+    void** function_ptr = (void**)&sm_breakpoint_set; \
+    if (SM_COUNT_ARGS(__VA_ARGS__) == 1U) { \
+        ((void (*)(SM_CALL_GDB_SHOW_CHAR_ARGS_TYPES(__VA_ARGS__, "")))function_ptr) \
+                (__VA_ARGS__, ""); \
+    } else if (SM_COUNT_ARGS(__VA_ARGS__) == 2U) { \
+        ((void (*)(SM_CALL_GDB_SHOW_CHAR_ARGS_TYPES(__VA_ARGS__)))function_ptr) \
+                (__VA_ARGS__); \
+    } \
+})
 
 #define BREAKPOINT_UNSET(SYM) sm_breakpoint_unset(SYM)
 
@@ -100,8 +119,8 @@ typedef struct sm_output {
 extern struct list_head outputs;
 extern struct mutex outputs_lock;
 
-extern void sm_debug(int num);
-extern void sm_breakpoint_set(const char* sym);
+extern void sm_debug(const char* msg);
+extern void sm_breakpoint_set(const char* sym, const char* cmd);
 extern void sm_breakpoint_unset(const char* sym);
 extern void sm_gdb(const char* cmd);
 

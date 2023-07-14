@@ -44,68 +44,29 @@
          SA_PRINTF(args); \
  } while(0)
 
-#define BREAKPOINT(nr) \
+#define BREAKPOINT(MSG) \
  do { \
      if (is_debugger_attached) \
          __asm__ __volatile__ ("int3":::); \
  } while(0)
 
-#define __KERNEL_DO_GDB_CALL() \
- do { \
-     sm_call_data.call_number = SM_CALL_GDB; \
-     if (sm_call(&sm_call_data) != SLIB_ERROR && \
-             sm_call_data.return_value != GDB_ERROR) { \
-             print_module_output(); \
-     } else { \
-         SA_LOG(MIN_VERBOSITY, "SM_CALL_GDB error in module\n"); \
-     } \
- } while(0)
+extern long sm_call_gdb(unsigned int gdb_call,
+        unsigned int declared_args_count, unsigned int args_count, ...);
 
-#define __KERNEL_GDB_CMD(gdb_mode, gdb_data) \
- do { \
-     sm_call_data_t sm_call_data = {0x0}; \
-     size_t data_length = strlen(gdb_data); \
-     size_t final_data_length = data_length + (size_t)(sizeof(unsigned int) + 1); \
-     if (final_data_length < data_length || final_data_length > (unsigned long)-1 \
-             || data_length == 0x0) { \
-         SA_LOG(MIN_VERBOSITY, "SM_CALL_GDB gdb_data length error\n"); \
-         break; \
-     } \
-     sm_call_data.data_length = (unsigned long)final_data_length; \
-     sm_call_data.data = (void*)malloc(final_data_length); \
-     if (!sm_call_data.data) { \
-         SA_LOG(MIN_VERBOSITY, "SM_CALL_GDB malloc error\n"); \
-         break; \
-     } \
-     *((char*)(sm_call_data.data) + sm_call_data.data_length - 1) = '\0'; \
-     *((unsigned int*)sm_call_data.data) = (unsigned int)gdb_mode; \
-     strcpy((void*)((char*)sm_call_data.data + sizeof(unsigned int)), gdb_data); \
-     __KERNEL_DO_GDB_CALL(); \
-     free(sm_call_data.data); \
- } while(0)
-
-#define KERNEL_BREAKPOINT_SET(function_name) \
- do { \
-     __KERNEL_GDB_CMD(GDB_MODE_BREAKPOINT_SET, function_name); \
- } while(0)
+#define KERNEL_BREAKPOINT_SET(...) \
+({ \
+    sm_call_gdb(GDB_MODE_BREAKPOINT_SET, 2, SM_COUNT_ARGS(__VA_ARGS__), __VA_ARGS__); \
+})
 
 #define KERNEL_BREAKPOINT_UNSET(function_name) \
- do { \
-     __KERNEL_GDB_CMD(GDB_MODE_BREAKPOINT_UNSET, function_name); \
- } while(0)
+({ \
+    sm_call_gdb(GDB_MODE_BREAKPOINT_UNSET, 1, 1, function_name); \
+})
 
-#define KERNEL_BREAKPOINT(nr) \
- do { \
-     char data[sizeof(unsigned int) + sizeof(int)] = {0x0}; \
-     char* data_ptr = data; \
-     *((unsigned int*)data_ptr) = GDB_MODE_BREAKPOINT; \
-     data_ptr = data_ptr + sizeof(unsigned int); \
-     *((int*)data_ptr) = nr; \
-     sm_call_data_t sm_call_data = {0x0}; \
-     sm_call_data.data_length = sizeof(data); \
-     sm_call_data.data = data; \
-     __KERNEL_DO_GDB_CALL(); \
- } while(0)
+#define KERNEL_BREAKPOINT(msg) \
+({ \
+    sm_call_gdb(GDB_MODE_BREAKPOINT, 1, 1, msg); \
+})
 
 #define KERNEL_GDB(gdb_cmd, ...) \
  do { \
@@ -115,7 +76,7 @@
      gdb_cmd_final = malloc(bytes_required); \
      if (gdb_cmd_final != NULL) { \
          snprintf(gdb_cmd_final, bytes_required, gdb_cmd __VA_OPT__(,) __VA_ARGS__); \
-         __KERNEL_GDB_CMD(GDB_MODE_BREAKPOINT_GDB, gdb_cmd_final); \
+         sm_call_gdb(GDB_MODE_BREAKPOINT_GDB, 1, 1, gdb_cmd_final); \
          free(gdb_cmd_final); \
      } \
  } while(0)
