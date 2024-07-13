@@ -107,10 +107,10 @@ cleanup:
 
 __attribute__((noinline))
 void direct_asm(void) {
-    register long rax __asm__ ("rax") = 0UL;
-    register long rbx __asm__ ("rbx") = 0UL;
-    register long rcx __asm__ ("rcx") = 0UL;
-    register long rdx __asm__ ("rdx") = 0UL;
+    register unsigned long rax __asm__ ("rax") = 0UL;
+    register unsigned long rbx __asm__ ("rbx") = 0UL;
+    register unsigned long rcx __asm__ ("rcx") = 0UL;
+    register unsigned long rdx __asm__ ("rdx") = 0UL;
     SA_LOG(MIN_VERBOSITY, "========== direct_asm =========\n");
     __asm__ __volatile__ (\
             "cpuid\n\t" \
