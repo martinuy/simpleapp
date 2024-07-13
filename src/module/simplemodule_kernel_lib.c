@@ -25,20 +25,20 @@
 DEFINE_MUTEX(outputs_lock);
 struct list_head outputs = LIST_HEAD_INIT(outputs);
 
-__attribute__((used, optimize("O0")))
-noinline void sm_debug(const char* msg) {
+__attribute__((used, noipa))
+void sm_debug(__attribute__((unused)) const char* msg) {
 }
 
-__attribute__((used, optimize("O0")))
-noinline void sm_breakpoint_set(const char* sym, const char* cmd) {
+__attribute__((used, noipa))
+void sm_breakpoint_set(__attribute__((unused)) const char* sym, __attribute__((unused)) const char* cmd) {
 }
 
-__attribute__((used, optimize("O0")))
-noinline void sm_breakpoint_unset(const char* sym) {
+__attribute__((used, noipa))
+void sm_breakpoint_unset(__attribute__((unused)) const char* sym) {
 }
 
-__attribute__((used, optimize("O0")))
-noinline void sm_gdb(const char* cmd) {
+__attribute__((used, noipa))
+void sm_gdb(__attribute__((unused)) const char* cmd) {
 }
 
 void sm_print_memory(const char* name, void* s, size_t l) {
