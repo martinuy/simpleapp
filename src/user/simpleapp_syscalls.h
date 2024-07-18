@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020
+ *   Martin Balao (martin.uy) - Copyright 2020, 2023
  */
 
 /* Copyright (C) 2001-2020 Free Software Foundation, Inc.
@@ -21,6 +21,8 @@
 
 #ifndef SIMPLEAPP_SYSCALLS_H
 #define SIMPLEAPP_SYSCALLS_H
+
+#include <errno.h>
 
 #define __set_errno(e) (errno = (e))
 
@@ -193,60 +195,35 @@
 # undef INTERNAL_SYSCALL_ERRNO
 # define INTERNAL_SYSCALL_ERRNO(val, err)	(-(val))
 
-// FOREACH macro based on https://stackoverflow.com/a/11994395
-#define FE_0(WHAT, X) WHAT(X)
-#define FE_1(WHAT, ...) __VA_OPT__(FE_0(WHAT, __VA_ARGS__))
-#define FE_2(WHAT, X, ...) WHAT(X)FE_1(WHAT, __VA_ARGS__)
-#define FE_3(WHAT, X, ...) WHAT(X)FE_2(WHAT, __VA_ARGS__)
-#define FE_4(WHAT, X, ...) WHAT(X)FE_3(WHAT, __VA_ARGS__)
-#define FE_5(WHAT, X, ...) WHAT(X)FE_4(WHAT, __VA_ARGS__)
-#define FE_6(WHAT, X, ...) WHAT(X)FE_5(WHAT, __VA_ARGS__)
-#define GET_MACRO(_0,_1,_2,_3,_4,_5,_6,NAME,...) NAME
-#define FOR_EACH(action,...) \
-  GET_MACRO(_0,__VA_ARGS__,FE_6,FE_5,FE_4,FE_3,FE_2,FE_1,)(action,__VA_ARGS__)
-
-# undef MOVE_PARAM_PTR
-# define MOVE_PARAM_PTR(X)                              \
-        *(unsigned long*)param_ptr = (unsigned long)X;  \
-        param_ptr += 1;
-
-# undef _COUNT_ARGS
-# define _COUNT_ARGS(X)                                 \
-    + 1
-
-# undef COUNT_ARGS
-# define COUNT_ARGS(...)                                \
-    0 FOR_EACH(_COUNT_ARGS,__VA_ARGS__)
-
 # undef SM_SYS
 # define SM_SYS(name, ...)                              \
 ({                                                      \
     long int resultvar = -1L;                           \
-    module_test_data_t module_test_data;                \
+    sm_call_data_t sm_call_data;                \
     unsigned long* param_ptr = NULL;                    \
-    module_test_data.test_number =                      \
-            TEST_SYSCALLS_TRAMPOLINE;                   \
-    module_test_data.data_length =                      \
+    sm_call_data.call_number =                      \
+            SM_CALL_SYSCALLS_TRAMPOLINE;                   \
+    sm_call_data.data_length =                      \
             sizeof(unsigned long) *                     \
-            (COUNT_ARGS(__VA_ARGS__) + 2);              \
-    module_test_data.data =                             \
-            calloc(module_test_data.data_length, 1);    \
-    if (module_test_data.data != NULL) {                \
+            (SM_COUNT_ARGS(__VA_ARGS__) + 2);              \
+    sm_call_data.data =                             \
+            calloc(sm_call_data.data_length, 1);    \
+    if (sm_call_data.data != NULL) {                \
         param_ptr =                                     \
-                (unsigned long*)module_test_data.data;  \
+                (unsigned long*)sm_call_data.data;  \
         *((__typeof__(SYS_ify (name))*)param_ptr) =     \
                 SYS_ify (name);                         \
         param_ptr += 1;                                 \
         *((unsigned long*)param_ptr) =                  \
-                COUNT_ARGS(__VA_ARGS__);                \
+                SM_COUNT_ARGS(__VA_ARGS__);                \
         param_ptr += 1;                                 \
         FOR_EACH(MOVE_PARAM_PTR,__VA_ARGS__)            \
-        if (run_module_test(&module_test_data) !=       \
+        if (sm_call(&sm_call_data) !=       \
                 SLIB_ERROR) {                           \
             print_module_output();                      \
-            resultvar = module_test_data.return_value;  \
+            resultvar = sm_call_data.return_value;  \
         }                                               \
-        free(module_test_data.data);                    \
+        free(sm_call_data.data);                    \
     }                                                   \
     resultvar;                                          \
 })

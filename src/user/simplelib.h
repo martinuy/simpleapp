@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020
+ *   Martin Balao (martin.uy) - Copyright 2020, 2023
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -18,10 +18,19 @@
 #ifndef SIMPLELIB_H
 #define SIMPLELIB_H
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 #include "simplemodule.h"
 
 #define SLIB_ERROR -1L
 #define SLIB_SUCCESS 0L
+
+#define MOVE_PARAM_PTR(X)                              \
+        *(unsigned long*)param_ptr = (unsigned long)X;  \
+        param_ptr += 1;
 
 #define SA_PRINTF(fmt,...) __SA_PRINTF("SimpleApp (PID: %d): " fmt, \
         getpid() __VA_OPT__(,) __VA_ARGS__)
@@ -35,19 +44,58 @@
          SA_PRINTF(args); \
  } while(0)
 
-#define BREAKPOINT(nr) \
+#define BREAKPOINT(MSG) \
  do { \
-    if (is_debugger_attached) \
-        __asm__ __volatile__ ("int3":::); \
+     if (is_debugger_attached) \
+         __asm__ __volatile__ ("int3":::); \
  } while(0)
+
+extern long sm_call_gdb(unsigned int gdb_call,
+        unsigned int declared_args_count, unsigned int args_count, ...);
+
+#define KERNEL_BREAKPOINT_SET(...) \
+({ \
+    sm_call_gdb(GDB_MODE_BREAKPOINT_SET, 2, SM_COUNT_ARGS(__VA_ARGS__), __VA_ARGS__); \
+})
+
+#define KERNEL_BREAKPOINT_UNSET(function_name) \
+({ \
+    sm_call_gdb(GDB_MODE_BREAKPOINT_UNSET, 1, 1, function_name); \
+})
+
+#define KERNEL_BREAKPOINT(msg) \
+({ \
+    sm_call_gdb(GDB_MODE_BREAKPOINT, 1, 1, msg); \
+})
+
+#define KERNEL_GDB(gdb_cmd, ...) \
+ do { \
+     char* gdb_cmd_final = NULL; \
+     int bytes_required = 0; \
+     bytes_required = snprintf(NULL, 0, gdb_cmd __VA_OPT__(,) __VA_ARGS__) + 1; \
+     gdb_cmd_final = malloc(bytes_required); \
+     if (gdb_cmd_final != NULL) { \
+         snprintf(gdb_cmd_final, bytes_required, gdb_cmd __VA_OPT__(,) __VA_ARGS__); \
+         sm_call_gdb(GDB_MODE_BREAKPOINT_GDB, 1, 1, gdb_cmd_final); \
+         free(gdb_cmd_final); \
+     } \
+ } while(0)
+
+extern unsigned long sm_call_function(const char* function_name, unsigned int args_count, ...);
+
+#define SM_CALL(name, ...) \
+({ \
+    unsigned int args_count = SM_COUNT_ARGS(__VA_ARGS__); \
+    sm_call_function(#name, args_count __VA_OPT__(,) __VA_ARGS__); \
+})
 
 extern int is_debugger_attached;
 extern int simplemodule_fd;
 
-extern long load_module(void);
-extern long unload_module(void);
-extern long run_module_test(module_test_data_t* d);
+extern long sm_call(sm_call_data_t* d);
 extern void print_module_output(void);
 extern const char* get_module_output(void); // Caller must free memory
+
+#include "simpleapp_syscalls.h"
 
 #endif // SIMPLELIB_H

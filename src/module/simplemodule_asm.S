@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020, 2022
+ *   Martin Balao (martin.uy) - Copyright 2020, 2023
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -18,9 +18,9 @@
     .text
 
     .align 8
-    .globl run_module_asm_hook
-    .type run_module_asm_hook, @function
-run_module_asm_hook:
+    .globl sm_asm_function_hook
+    .type sm_asm_function_hook, @function
+sm_asm_function_hook:
     lea (%rip), %rax
     ret
-    .size run_module_asm_hook,.-run_module_asm_hook
+    .size sm_asm_function_hook,.-sm_asm_function_hook

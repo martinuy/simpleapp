@@ -1,5 +1,5 @@
 #
-#   Martin Balao (martin.uy) - © Copyright 2020
+#   Martin Balao (martin.uy) - Copyright 2020, 2023
 #
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
 #
 
 obj-m += ${MODULE_NAME}.o
-simplemodule-objs := simplemodule_main.o simplemodule_asm.o
+simplemodule-objs := simplemodule_main.o simplemodule_core.o simplemodule_kernel_lib.o simplemodule_asm.o
 
 ccflags-y := ${CFLAGS}
 

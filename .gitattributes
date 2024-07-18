@@ -1,0 +1,2 @@
+src/module/simplemodule_main.c merge=ignore
+src/user/simpleapp.c merge=ignore
