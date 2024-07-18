@@ -128,4 +128,8 @@ extern const char* sm_get_syscall_name(unsigned long sys_code);
 extern unsigned long sm_lookup_name(const char* sym);
 extern void sm_print_memory(const char* name, void* s, size_t l);
 
+extern void pre_syscall_trampoline_hook(unsigned long syscall_number,
+        unsigned long syscall_args[]);
+extern void post_syscall_trampoline_hook(unsigned long syscall_number,
+        unsigned long syscall_args[], unsigned long return_value);
 #endif // SIMPLEMODULE_KERNEL_LIB_H

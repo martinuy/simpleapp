@@ -20,6 +20,8 @@
 
 #include <linux/syscalls.h>
 
+#include "simplemodule_kernel_lib.h"
+
 const char* sm_get_syscall_name(unsigned long sys_code) {
     switch(sys_code) {
     #define syscode_case(x) case __NR_##x: return "SYS_"#x;

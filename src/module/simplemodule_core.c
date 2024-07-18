@@ -100,11 +100,6 @@
 /////////////////////////
 // Function prototypes //
 /////////////////////////
-extern void pre_syscall_trampoline_hook(unsigned long syscall_number,
-        unsigned long syscall_args[]);
-extern void post_syscall_trampoline_hook(unsigned long syscall_number,
-        unsigned long syscall_args[], unsigned long return_value);
-
 static long unlocked_ioctl(struct file* f, unsigned int cmd, unsigned long arg);
 static long sm_call(unsigned long arg);
 
@@ -321,7 +316,11 @@ static int __init simplemodule_init(void) {
     SM_LOG(MAX_VERBOSITY, "Device major: %d\n", MAJOR(simplemodule_devt));
     SM_LOG(MAX_VERBOSITY, "Device minor: %d\n", MINOR(simplemodule_devt));
 
+    #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
     if ((simplemodule_class = class_create(THIS_MODULE, SAMODULE_NAME "_sys")) == NULL)
+    #else // LINUX_VERSION_CODE
+    if ((simplemodule_class = class_create(SAMODULE_NAME "_sys")) == NULL)
+    #endif // LINUX_VERSION_CODE
         goto error;
 
     if ((simplemodule_device = device_create(simplemodule_class, NULL,
