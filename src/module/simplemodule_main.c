@@ -23,6 +23,7 @@
 
 noinline void pre_syscall_trampoline_hook(unsigned long syscall_number,
         unsigned long syscall_args[]) {
+    GDB("print ((struct task_struct*)(0x%px))->pid", current);
 }
 
 noinline void post_syscall_trampoline_hook(unsigned long syscall_number,

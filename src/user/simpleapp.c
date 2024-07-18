@@ -33,57 +33,14 @@
   if (test() == TEST_ERROR) \
       goto error;
 
-static int initialize_globals(void);
-
-static int merge_vma_area_structs_test(void);
-static int dump_memory_structures_test(void);
-static int fork_copy_on_write_test(void);
-
 typedef enum fs_type {TMPFS, EXT4} fs_type_t;
-static int file_backed_memory_allocation_tmpfs_test(void);
-static int file_backed_memory_allocation_ext4_test(void);
-static int file_backed_memory_allocation_test(fs_type_t fs_type,
-        const char* fs_dir);
-static int pte_entry_states_transition_test(void);
+
+static int initialize_globals(void);
+static int create_blank_file_helper(fs_type_t fs_type,
+        const char* fs_dir, int* fd_ptr, int flags);
 
 static long page_size;
 static const char* user_home_dir;
-
-int main(void) {
-    int ret;
-    SA_LOG(MIN_VERBOSITY, "main - begin\n");
-
-    if (initialize_globals() == TEST_ERROR) {
-        goto error;
-    }
-
-    ///////////////
-    //   Tests   //
-    ///////////////
-
-    //EXECUTE_TEST(merge_vma_area_structs_test);
-
-    //EXECUTE_TEST(dump_memory_structures_test);
-
-    //EXECUTE_TEST(fork_copy_on_write_test);
-
-    //EXECUTE_TEST(file_backed_memory_allocation_tmpfs_test);
-
-    //EXECUTE_TEST(file_backed_memory_allocation_ext4_test);
-
-    EXECUTE_TEST(pte_entry_states_transition_test);
-
-    goto success;
-error:
-    ret = TEST_ERROR;
-    SA_LOG(MIN_VERBOSITY, "main - end error\n");
-    goto cleanup;
-success:
-    ret = TEST_SUCCESS;
-    SA_LOG(MIN_VERBOSITY, "main - end success\n");
-cleanup:
-    return ret;
-}
 
 static int initialize_globals(void) {
     int ret = TEST_ERROR;
@@ -99,6 +56,41 @@ error:
 success:
     ret = TEST_SUCCESS;
 cleanup:
+    return ret;
+}
+
+static int submit_bio_test(void) {
+    int ret = TEST_ERROR;
+    long sys_ret;
+    char buff[256];
+    int test_file_fd = -1;
+    if (create_blank_file_helper(EXT4, user_home_dir, &test_file_fd, 0) == TEST_ERROR) {
+        goto error;
+    }
+    memset(buff, 'a', sizeof(buff));
+    if (SM_SYS(write, test_file_fd, buff, sizeof(buff)) < 0) {
+        goto error;
+    }
+    KERNEL_BREAKPOINT_SET("mpage_prepare_extent_to_map");
+    KERNEL_BREAKPOINT_SET("bio_add_page");
+    KERNEL_BREAKPOINT_SET("submit_bio");
+    sys_ret = SM_SYS(fsync, test_file_fd);
+    KERNEL_BREAKPOINT_UNSET("submit_bio");
+    KERNEL_BREAKPOINT_UNSET("bio_add_page");
+    KERNEL_BREAKPOINT_UNSET("mpage_prepare_extent_to_map");
+    if (sys_ret != 0) {
+        goto error;
+    }
+    goto success;
+error:
+    ret = TEST_ERROR;
+    goto cleanup;
+success:
+    ret = TEST_SUCCESS;
+cleanup:
+    if (test_file_fd != -1) {
+        close(test_file_fd);
+    }
     return ret;
 }
 
@@ -118,11 +110,13 @@ static int fork_copy_on_write_test(void) {
     SA_LOG(MIN_VERBOSITY, "mmaped area: 0x%p\n", mmaped_page);
     // Generate the actual memory allocation
     KERNEL_BREAKPOINT_SET("handle_mm_fault");
+    KERNEL_GDB("break *(handle_mm_fault+3952)");
     KERNEL_BREAKPOINT_SET("__alloc_pages_nodemask");
     KERNEL_GDB("stopi on");
     *((char*)mmaped_page) = 1;
     KERNEL_GDB("stopi off");
     KERNEL_BREAKPOINT_UNSET("__alloc_pages_nodemask");
+    KERNEL_GDB("delete breakpoint *(handle_mm_fault+3952)");
     KERNEL_BREAKPOINT_UNSET("handle_mm_fault");
     *((char*)mmaped_page + page_size) = 2;
     child = fork();
@@ -213,14 +207,6 @@ cleanup:
 static int dump_memory_structures_test(void) {
     SM_CALL(show_memory_structures);
     return TEST_SUCCESS;
-}
-
-static int file_backed_memory_allocation_ext4_test(void) {
-    return file_backed_memory_allocation_test(EXT4, user_home_dir);
-}
-
-static int file_backed_memory_allocation_tmpfs_test(void) {
-    return file_backed_memory_allocation_test(TMPFS, P_tmpdir);
 }
 
 static int create_blank_file_helper(fs_type_t fs_type,
@@ -429,6 +415,14 @@ cleanup:
     return ret;
 }
 
+static int file_backed_memory_allocation_ext4_test(void) {
+    return file_backed_memory_allocation_test(EXT4, user_home_dir);
+}
+
+static int file_backed_memory_allocation_tmpfs_test(void) {
+    return file_backed_memory_allocation_test(TMPFS, P_tmpdir);
+}
+
 static int pte_entry_states_transition_test(void) {
     int ret = TEST_ERROR;
     long sys_ret;
@@ -445,7 +439,7 @@ static int pte_entry_states_transition_test(void) {
     if (create_blank_file_helper(EXT4, user_home_dir, &test_file_fd, 0) == TEST_ERROR) {
         goto error;
     }
-    test_file_mmapped_addr = (void*)SM_SYS(mmap, NULL, page_size, PROT_READ | PROT_WRITE, MAP_SHARED, test_file_fd, 0);
+    test_file_mmapped_addr = (void*)SM_SYS(mmap, NULL, page_size * 2, PROT_READ | PROT_WRITE, MAP_SHARED, test_file_fd, 0);
     if ((long)test_file_mmapped_addr < 0L) {
         SA_LOG(MIN_VERBOSITY, "Test file mapping failed\n");
         test_file_mmapped_addr = MAP_FAILED;
@@ -467,9 +461,15 @@ static int pte_entry_states_transition_test(void) {
             page_table_entries[page_table_entries[4]]);
     SA_LOG(MIN_VERBOSITY, "Parent writing test_file_mmapped_addr[0]\n");
     //KERNEL_BREAKPOINT_SET("native_set_pte_at");
-    //KERNEL_GDB("stopi on");
-    *(char*)test_file_mmapped_addr = 'a';
-    //KERNEL_GDB("stopi off");
+    KERNEL_BREAKPOINT_SET("ext4_da_get_block_prep");
+    KERNEL_BREAKPOINT_SET("set_page_dirty");
+    KERNEL_BREAKPOINT_SET("__set_page_dirty_buffers");
+    KERNEL_GDB("stopi on");
+    *((char*)test_file_mmapped_addr) = 'a';
+    KERNEL_GDB("stopi off");
+    KERNEL_BREAKPOINT_UNSET("__set_page_dirty_buffers");
+    KERNEL_BREAKPOINT_UNSET("set_page_dirty");
+    KERNEL_BREAKPOINT_SET("ext4_da_get_block_prep");
     //KERNEL_BREAKPOINT_UNSET("native_set_pte_at");
     SA_LOG(MIN_VERBOSITY, "Parent wrote test_file_mmapped_addr[0] = %c\n", *(char*)test_file_mmapped_addr);
     if (SM_CALL(get_page_tables_entry, (unsigned long)test_file_mmapped_addr,
@@ -481,9 +481,10 @@ static int pte_entry_states_transition_test(void) {
     // At this point, a page fault occurred and the pte entry points to the page cache's page.
     // The pte entry has the _PAGE_BIT_DIRTY (bit 6) and _PAGE_BIT_RW (bit 1) bits set.
 
-    KERNEL_BREAKPOINT_SET("native_set_pte_at");
+    //KERNEL_BREAKPOINT("fsync coming...");
+    //KERNEL_BREAKPOINT_SET("native_set_pte_at");
     sys_ret = SM_SYS(fsync, test_file_fd);
-    KERNEL_BREAKPOINT_UNSET("native_set_pte_at");
+    //KERNEL_BREAKPOINT_UNSET("native_set_pte_at");
     if (sys_ret != 0) {
         goto error;
     }
@@ -553,6 +554,7 @@ static int pte_entry_states_transition_test(void) {
         }
         SA_LOG(MIN_VERBOSITY, "Child post-parent-write page tables entry: 0x%016lx\n",
                 page_table_entries[page_table_entries[4]]);
+        SA_LOG(MIN_VERBOSITY, "Child post-parent-write read test_file_mmapped_addr[0] = %c\n", *(char*)test_file_mmapped_addr);
     } else if (child != -1) {
         SA_LOG(MIN_VERBOSITY, "Parent waiting for child to read: started\n");
         while ((sem_ret = sem_wait(shared_sem_parent)) == -1 && errno == EINTR) {
@@ -618,5 +620,43 @@ cleanup:
             SM_SYS(munmap, shared_page, page_size);
         }
     }
+    return ret;
+}
+
+int main(void) {
+    int ret;
+    SA_LOG(MIN_VERBOSITY, "main - begin\n");
+
+    if (initialize_globals() == TEST_ERROR) {
+        goto error;
+    }
+
+    ///////////////
+    //   Tests   //
+    ///////////////
+
+    //EXECUTE_TEST(merge_vma_area_structs_test);
+
+    EXECUTE_TEST(dump_memory_structures_test);
+
+    //EXECUTE_TEST(fork_copy_on_write_test);
+
+    //EXECUTE_TEST(file_backed_memory_allocation_tmpfs_test);
+
+    //EXECUTE_TEST(file_backed_memory_allocation_ext4_test);
+
+    //EXECUTE_TEST(pte_entry_states_transition_test);
+
+    //EXECUTE_TEST(submit_bio_test);
+
+    goto success;
+error:
+    ret = TEST_ERROR;
+    SA_LOG(MIN_VERBOSITY, "main - end error\n");
+    goto cleanup;
+success:
+    ret = TEST_SUCCESS;
+    SA_LOG(MIN_VERBOSITY, "main - end success\n");
+cleanup:
     return ret;
 }
