@@ -1,5 +1,5 @@
 /*
- *   Martin Balao (martin.uy) - Copyright 2020, 2022
+ *   Martin Balao (martin.uy) - Copyright 2020, 2024
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -33,73 +33,11 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "simpleapp_syscalls.h"
 #include "simplelib.h"
 #include "simplemodule.h"
 
-static void execute_module_asm_hook(void);
-static void execute_module_code_hook(void);
-static void execute_proxied_syscalls_hook(void);
-static void execute_direct_syscalls_hook(void);
-static void execute_direct_asm_hook(void);
-
-int main(void) {
-    int ret = -1;
-    SA_LOG(MAX_VERBOSITY, "main - begin\n");
-
-    if (load_module() == SLIB_ERROR)
-        goto error;
-
-    BREAKPOINT(1);
-
-    execute_proxied_syscalls_hook();
-
-    execute_module_asm_hook();
-
-    execute_module_code_hook();
-
-    execute_direct_asm_hook();
-
-    execute_direct_syscalls_hook();
-
-    goto success;
-error:
-    SA_LOG(MIN_VERBOSITY, "main - end error\n");
-    ret = -1;
-    goto cleanup;
-success:
-    SA_LOG(MAX_VERBOSITY, "main - end success\n");
-    ret = 0;
-cleanup:
-    unload_module();
-    return ret;
-}
-
-__attribute__((noinline))
-void execute_module_asm_hook(void) {
-    module_test_data_t module_test_data = {0x0};
-    module_test_data.test_number = TEST_MODULE_ASM;
-    if (run_module_test(&module_test_data) == SLIB_ERROR)
-        goto error;
-    print_module_output();
-    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_ASM return: 0x%lx\n", module_test_data.return_value);
-    return;
-error:
-    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_ASM error\n");
-}
-
-__attribute__((noinline))
-void execute_module_code_hook(void) {
-    module_test_data_t module_test_data = {0x0};
-    module_test_data.test_number = TEST_MODULE_CODE;
-    if (run_module_test(&module_test_data) == SLIB_ERROR)
-        goto error;
-    print_module_output();
-    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_CODE return: 0x%lx\n", module_test_data.return_value);
-    return;
-error:
-    SA_LOG(MIN_VERBOSITY, "TEST_MODULE_CODE error\n");
-}
+#define TEST_ERROR -1
+#define TEST_SUCCESS 0
 
 char* read_buff = NULL;
 char* read_buff_ptr = NULL;
@@ -136,7 +74,7 @@ static struct sigevent mq1_sevp = {
 };
 
 __attribute__((noinline))
-void execute_proxied_syscalls_hook(void) {
+void run_posix_queues_test(void) {
     read_buff_size = READ_BUFF_INC_SIZE;
     if ((read_buff = (char*)malloc(READ_BUFF_INC_SIZE)) == NULL)
         goto error;
@@ -241,10 +179,20 @@ cleanup:
         free(read_buff);
 }
 
-__attribute__((noinline))
-void execute_direct_syscalls_hook(void) {
-}
+int main(void) {
+    int ret;
+    SA_LOG(MIN_VERBOSITY, "main - begin\n");
 
-__attribute__((noinline))
-void execute_direct_asm_hook(void) {
+    run_posix_queues_test();
+
+    goto success;
+error:
+    ret = TEST_ERROR;
+    SA_LOG(MIN_VERBOSITY, "main - end error\n");
+    goto cleanup;
+success:
+    ret = TEST_SUCCESS;
+    SA_LOG(MIN_VERBOSITY, "main - end success\n");
+cleanup:
+    return ret;
 }
