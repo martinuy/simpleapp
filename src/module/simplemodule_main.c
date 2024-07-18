@@ -30,6 +30,9 @@ noinline void post_syscall_trampoline_hook(unsigned long syscall_number,
         unsigned long syscall_args[], unsigned long return_value) {
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-prototypes"
+
 unsigned long get_struct_page(unsigned long vaddr);
 static void print_mem_zone(struct zone* zone);
 static void print_node_zonelists(pg_data_t* pglist_data_ptr);
@@ -158,8 +161,9 @@ unsigned long show_memory_structures(void) {
     //BREAKPOINT_UNSET("__alloc_pages_nodemask");
 
     {
-        struct vm_area_struct* vma_p = current->mm->mmap;
-        while (vma_p != NULL) {
+        VMA_ITERATOR(vmi, current->mm, 0);
+        struct vm_area_struct* vma_p = vma_next(&vmi);
+        while (vma_p) {
             SM_PRINTF("-----------------\n");
             SM_PRINTF("vma_p->vm_start: 0x%lx\n", vma_p->vm_start);
             if (vma_p->vm_file != NULL) {
@@ -173,7 +177,7 @@ unsigned long show_memory_structures(void) {
             if (vma_p->anon_vma != NULL) {
                 SM_PRINTF("vma_p->anon_vma->refcount: %d\n", vma_p->anon_vma->refcount.counter);
             }
-            vma_p = vma_p->vm_next;
+            vma_p = vma_next(&vmi);
         }
     }
     SM_PRINTF("\n");
@@ -219,7 +223,7 @@ unsigned long get_page_tables_entry(unsigned long vaddr,
         if (pmd_trans_huge(*pmd)) {
             *max_level = 2UL;
         } else {
-            pte = pte_offset_map(pmd, vaddr);
+            pte = pte_offset_kernel(pmd, vaddr);
             output_kernel[3] = *(unsigned long*)pte;
             *max_level = 3UL;
         }
@@ -236,22 +240,22 @@ unsigned long get_page_tables_entry(unsigned long vaddr,
         SM_PRINTF("PUD offset: 0x%px\n", ((char*)pud - pgd_page_vaddr(*pgd)));
         SM_PRINTF("PUD (entry's addr): 0x%px\n", pud);
         SM_PRINTF("*PUD (entry's value): 0x%lx\n", pud_val(*pud));
-        SM_PRINTF("*PUD (entry's next table value): 0x%lx\n", pud_page_vaddr(*pud));
+        SM_PRINTF("*PUD (entry's next table value): 0x%px\n", pud_pgtable(*pud));
         if (pud_trans_huge(*pud)) {
             SM_PRINTF("PUD page IS transparent huge\n");
         } else {
             SM_PRINTF("PUD page IS NOT transparent huge\n");
         }
         if (*max_level > 1UL) {
-            SM_PRINTF("PMD start: 0x%lx\n", pud_page_vaddr(*pud));
-            SM_PRINTF("PMD offset: 0x%px\n", ((char*)pmd - pud_page_vaddr(*pud)));
+            SM_PRINTF("PMD start: 0x%px\n", pud_pgtable(*pud));
+            SM_PRINTF("PMD offset: 0x%px\n", (char*)((char*)pmd - (char*)pud_pgtable(*pud)));
             SM_PRINTF("PMD (entry's addr): 0x%px\n", pmd);
             SM_PRINTF("*PMD (entry's value): 0x%lx\n", pmd_val(*pmd));
             SM_PRINTF("*PMD (entry's next table value): 0x%lx\n", pmd_page_vaddr(*pmd));
-            if (pmd_large(*pmd)) {
-                SM_PRINTF("pmd_large: true\n");
+            if (pmd_leaf(*pmd)) {
+                SM_PRINTF("pmd_leaf: true\n");
             } else {
-                SM_PRINTF("pmd_large: false\n");
+                SM_PRINTF("pmd_leaf: false\n");
             }
             if (pmd_trans_huge(*pmd)) {
                 SM_PRINTF("PMD page IS transparent huge\n");
@@ -277,7 +281,7 @@ unsigned long get_page_tables_entry(unsigned long vaddr,
         }
     }
 
-    if (access_ok(output, sizeof(output_kernel))) {
+    if (access_ok((char __user *)output, sizeof(output_kernel))) {
         if (copy_to_user((void*)output, output_kernel, sizeof(output_kernel)) != 0) {
             goto error;
         }
@@ -364,3 +368,5 @@ static void print_node_zonelists(pg_data_t* pglist_data_ptr) {
     }
     SM_PRINTF("---\n");
 }
+
+#pragma GCC diagnostic pop
