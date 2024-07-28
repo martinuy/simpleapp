@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-#   Martin Balao (martin.uy) - Copyright 2020
+#   Martin Balao (martin.uy) - Copyright 2020, 2024
 #
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -58,8 +58,9 @@ cd src
 cd ..
 
 mkdir bin
-cp src/user/${APP_NAME} bin/
-cp src/user/lib${LIB_NAME}.so bin/
-cp src/module/${MODULE_NAME}.ko bin/
+cp src/user/${APP_NAME} bin
+cp src/user/lib${LIB_NAME}.so bin
+cp src/module/${MODULE_NAME}.ko bin
 
 tar cvzf ${APP_NAME}.tar.gz --transform s/bin/${APP_NAME}/ bin
+mv ${APP_NAME}.tar.gz bin
