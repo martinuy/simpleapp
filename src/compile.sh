@@ -29,7 +29,7 @@ echo "$LIB_COMPILE_COMMAND"
 $LIB_COMPILE_COMMAND && chmod +x user/lib${LIB_NAME}.so
 
 echo "Compiling app..."
-TEST_COMPILE_COMMAND="gcc ${CFLAGS} -o user/${APP_NAME} -Wl,-rpath,\$ORIGIN -Iuser -Imodule -Luser user/${APP_NAME}.c -l${LIB_NAME} -pthread"
+TEST_COMPILE_COMMAND="gcc ${CFLAGS} -o user/${APP_NAME} -Wl,-rpath,\$ORIGIN -Iuser -Imodule -Luser user/${APP_NAME}.c -l${LIB_NAME} -lbpf -pthread"
 echo "$TEST_COMPILE_COMMAND"
 $TEST_COMPILE_COMMAND
 
