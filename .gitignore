@@ -8,7 +8,6 @@
 *.order
 *.symvers
 *.tar.gz
-my_*.sh
-deploy.sh
+run.sh
 bin
 src/user/simpleapp
