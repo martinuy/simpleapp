@@ -108,12 +108,16 @@ static int test_sock(void)
         .log_size = BPF_LOG_BUF_SIZE,
     );
 
-    KERNEL_BREAKPOINT_SET("__sys_bpf");
+    //KERNEL_BREAKPOINT_SET("__sys_bpf");
+    KERNEL_BREAKPOINT_SET("bpf_check");
+    KERNEL_BREAKPOINT_SET("bpf_int_jit_compile");
     KERNEL_GDB("stopi on");
     prog_fd = bpf_prog_load(BPF_PROG_TYPE_SOCKET_FILTER, NULL, "GPL",
                 prog, insns_cnt, &opts);
     KERNEL_GDB("stopi off");
-    KERNEL_BREAKPOINT_UNSET("__sys_bpf");
+    KERNEL_BREAKPOINT_UNSET("bpf_int_jit_compile");
+    KERNEL_BREAKPOINT_UNSET("bpf_check");
+    //KERNEL_BREAKPOINT_UNSET("__sys_bpf");
     if (prog_fd < 0) {
         printf("failed to load prog '%s'\n", strerror(errno));
         goto cleanup;
@@ -147,9 +151,40 @@ cleanup:
     return 0;
 }
 
+static const char bpf_jit_option_enable[] = "1";
+static int bpf_jit_enable(void) {
+    int ret;
+    FILE* fp = NULL;
+    size_t fp_written;
+    fp = fopen("/proc/sys/net/core/bpf_jit_enable", "w");
+    if (fp == NULL) {
+        goto error;
+    }
+    fp_written = fwrite(bpf_jit_option_enable, sizeof(bpf_jit_option_enable[0]), strlen(bpf_jit_option_enable), fp);
+    if (fp_written != strlen(bpf_jit_option_enable)) {
+        goto error;
+    }
+    goto success;
+error:
+    ret = -1;
+    SA_LOG(MIN_VERBOSITY, "bpf_jit_enable - end error\n");
+    goto cleanup;
+success:
+    ret = 0;
+    SA_LOG(MAX_VERBOSITY, "bpf_jit_enable - end success\n");
+cleanup:
+    if (fp != NULL) {
+        fclose(fp);
+    }
+    return ret;
+}
+
 __attribute__((noinline))
 static int count_network_packets() {
     FILE *f;
+
+    // Not needed if CONFIG_BPF_JIT_ALWAYS_ON=y
+    bpf_jit_enable();
 
     f = popen("ping -4 -c5 localhost", "r");
     (void)f;
