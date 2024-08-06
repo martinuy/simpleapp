@@ -109,14 +109,14 @@ static int test_sock(void)
     );
 
     //KERNEL_BREAKPOINT_SET("__sys_bpf");
-    KERNEL_BREAKPOINT_SET("bpf_check");
+    //KERNEL_BREAKPOINT_SET("bpf_check");
     KERNEL_BREAKPOINT_SET("bpf_int_jit_compile");
-    KERNEL_GDB("stopi on");
+    KERNEL_GDB("stopi follow-session");
     prog_fd = bpf_prog_load(BPF_PROG_TYPE_SOCKET_FILTER, NULL, "GPL",
                 prog, insns_cnt, &opts);
-    KERNEL_GDB("stopi off");
+    //KERNEL_GDB("stopi off");
     KERNEL_BREAKPOINT_UNSET("bpf_int_jit_compile");
-    KERNEL_BREAKPOINT_UNSET("bpf_check");
+    //KERNEL_BREAKPOINT_UNSET("bpf_check");
     //KERNEL_BREAKPOINT_UNSET("__sys_bpf");
     if (prog_fd < 0) {
         printf("failed to load prog '%s'\n", strerror(errno));
