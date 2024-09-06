@@ -45,7 +45,7 @@ cd ..
 rm -f ${APP_NAME}.tar.gz
 rm -rf bin
 
-if [ $1 = "clean" ]; then
+if [ "$1" = "clean" ]; then
     exit 0
 fi
 
