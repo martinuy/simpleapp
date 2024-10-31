@@ -103,9 +103,14 @@ static int test_sock(void)
         BPF_EXIT_INSN(),
     };
     size_t insns_cnt = ARRAY_SIZE(prog);
+    bpf_log_buf[0] = '\0';
     LIBBPF_OPTS(bpf_prog_load_opts, opts,
         .log_buf = bpf_log_buf,
         .log_size = BPF_LOG_BUF_SIZE,
+        .log_level = 1 /* BPF_LOG_LEVEL1 */ |
+                     2 /* BPF_LOG_LEVEL2 */ |
+                     4 /* BPF_LOG_STATS */  |
+                     8 /* BPF_LOG_FIXED */,
     );
 
     //KERNEL_BREAKPOINT_SET("__sys_bpf");
@@ -147,6 +152,8 @@ static int test_sock(void)
                tcp_cnt, udp_cnt, icmp_cnt);
         sleep(1);
     }
+    printf("%%%%%%%%%%%%%%%%%%%%%%%%\n%s%%%%%%%%%%%%%%%%%%%%%%%%\n",
+           bpf_log_buf);
 
 cleanup:
     /* maps, programs, raw sockets will auto cleanup on process exit */
