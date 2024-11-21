@@ -152,8 +152,7 @@ static int test_sock(void)
                tcp_cnt, udp_cnt, icmp_cnt);
         sleep(1);
     }
-    printf("%%%%%%%%%%%%%%%%%%%%%%%%\n%s%%%%%%%%%%%%%%%%%%%%%%%%\n",
-           bpf_log_buf);
+    SA_LOG(MIN_VERBOSITY, "%s\n", bpf_log_buf);
 
 cleanup:
     /* maps, programs, raw sockets will auto cleanup on process exit */
