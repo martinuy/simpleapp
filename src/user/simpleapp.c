@@ -70,7 +70,7 @@ cleanup:
 #include <linux/ip.h>
 #include <stddef.h>
 #include <bpf/bpf.h>
-#include "bpf_insn.h"
+#include <tools/include/linux/filter.h>
 #include "sock_example.h"
 #include "bpf_util.h"
 
