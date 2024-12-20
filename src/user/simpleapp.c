@@ -91,6 +91,10 @@ static int test_sock(void)
     struct bpf_insn prog[] = {
         BPF_MOV64_REG(BPF_REG_6, BPF_REG_1),
         BPF_LD_ABS(BPF_B, ETH_HLEN + offsetof(struct iphdr, protocol) /* R0 = ip->proto */),
+        // The verifier expands the above BPF_LD_ABS as:
+        //BPF_MOV64_IMM(BPF_REG_2, ETH_HLEN + offsetof(struct iphdr, protocol)),
+        //BPF_MOV64_REG(BPF_REG_1, BPF_REG_6),
+        //BPF_EMIT_CALL(...),
         BPF_STX_MEM(BPF_W, BPF_REG_10, BPF_REG_0, -4), /* *(u32 *)(fp - 4) = r0 */
         BPF_MOV64_REG(BPF_REG_2, BPF_REG_10),
         BPF_ALU64_IMM(BPF_ADD, BPF_REG_2, -4), /* r2 = fp - 4 */
@@ -115,14 +119,20 @@ static int test_sock(void)
 
     //KERNEL_BREAKPOINT_SET("__sys_bpf");
     //KERNEL_BREAKPOINT_SET("bpf_check");
+    //KERNEL_BREAKPOINT_SET("bpf_gen_ld_abs");
     //KERNEL_BREAKPOINT_SET("bpf_int_jit_compile");
     KERNEL_BREAKPOINT_SET("do_jit"); // This function is called on each JIT phase (max 20).
+    //KERNEL_BREAKPOINT_SET("get_helper_proto");
+    //KERNEL_BREAKPOINT_SET("x86_call_depth_emit_accounting");
     KERNEL_GDB("stopi follow-session");
     prog_fd = bpf_prog_load(BPF_PROG_TYPE_SOCKET_FILTER, NULL, "GPL",
                 prog, insns_cnt, &opts);
     //KERNEL_GDB("stopi off");
+    //KERNEL_BREAKPOINT_UNSET("x86_call_depth_emit_accounting");
+    //KERNEL_BREAKPOINT_UNSET("get_helper_proto");
     KERNEL_BREAKPOINT_UNSET("do_jit");
     //KERNEL_BREAKPOINT_UNSET("bpf_int_jit_compile");
+    //KERNEL_BREAKPOINT_UNSET("bpf_gen_ld_abs");
     //KERNEL_BREAKPOINT_UNSET("bpf_check");
     //KERNEL_BREAKPOINT_UNSET("__sys_bpf");
     if (prog_fd < 0) {
