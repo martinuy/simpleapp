@@ -84,7 +84,7 @@ static int test_sock(void)
     map_fd = bpf_map_create(BPF_MAP_TYPE_ARRAY, NULL, sizeof(key), sizeof(value),
                 256, NULL);
     if (map_fd < 0) {
-        printf("failed to create map '%s'\n", strerror(errno));
+        SA_PRINTF("failed to create map '%s'\n", strerror(errno));
         goto cleanup;
     }
 
@@ -136,7 +136,7 @@ static int test_sock(void)
     //KERNEL_BREAKPOINT_UNSET("bpf_check");
     //KERNEL_BREAKPOINT_UNSET("__sys_bpf");
     if (prog_fd < 0) {
-        printf("failed to load prog '%s'\n", strerror(errno));
+        SA_PRINTF("failed to load prog '%s'\n", strerror(errno));
         goto cleanup;
     }
 
@@ -144,7 +144,7 @@ static int test_sock(void)
 
     if (setsockopt(sock, SOL_SOCKET, SO_ATTACH_BPF, &prog_fd,
                sizeof(prog_fd)) < 0) {
-        printf("setsockopt %s\n", strerror(errno));
+        SA_PRINTF("setsockopt %s\n", strerror(errno));
         goto cleanup;
     }
 
@@ -158,7 +158,7 @@ static int test_sock(void)
         key = IPPROTO_ICMP;
         assert(bpf_map_lookup_elem(map_fd, &key, &icmp_cnt) == 0);
 
-        printf("TCP %lld UDP %lld ICMP %lld packets\n",
+        SA_PRINTF("TCP %lld UDP %lld ICMP %lld packets\n",
                tcp_cnt, udp_cnt, icmp_cnt);
         sleep(1);
     }
